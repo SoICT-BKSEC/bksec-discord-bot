@@ -3,6 +3,7 @@ import { Command } from '../../types';
 import databaseService from '../../services/database.service';
 import { errorEmbed, warningEmbed } from '../../utils/embed.builder';
 import logger from '../../utils/logger';
+import { requireAdmin } from '../../utils/role.guard';
 
 const command: Command = {
   data: new SlashCommandBuilder()
@@ -12,22 +13,29 @@ const command: Command = {
       option
         .setName('search_id')
         .setDescription('Nhập CTFTime ID, hoặc Discord Category ID')
+        .setMaxLength(20)
         .setRequired(true)
     ) as SlashCommandBuilder,
 
   async execute(interaction: ChatInputCommandInteraction) {
     try {
+      if (!(await requireAdmin(interaction))) return;
+
       if (!interaction.guild) {
-        await interaction.reply({ embeds: [errorEmbed('This command must be used in a server')], ephemeral: true });
+        await interaction.reply({
+          embeds: [errorEmbed('This command must be used in a server')],
+          ephemeral: true,
+        });
         return;
       }
 
       await interaction.deferReply({ ephemeral: true });
 
-      const searchId = interaction.options.get('search_id')?.value as string;
+      const searchId = interaction.options.getString('search_id', true).trim();
 
       // Find CTF by CTFtime ID or Category ID
-      let ctf = await databaseService.findByCTFTimeId(parseInt(searchId));
+      const ctftimeId = /^\d{1,10}$/.test(searchId) ? Number(searchId) : null;
+      let ctf = ctftimeId ? await databaseService.findByCTFTimeId(ctftimeId) : null;
 
       if (!ctf) {
         ctf = await databaseService.findByCategoryId(searchId);
@@ -40,7 +48,7 @@ const command: Command = {
 
       // Show confirmation buttons
       const { DeleteConfirmButtons } = await import('../../components/buttons');
-      const view = new DeleteConfirmButtons(ctf.data.name, ctf.key, interaction.guild);
+      const view = new DeleteConfirmButtons(ctf.key, interaction.user.id);
 
       await interaction.editReply({
         embeds: [

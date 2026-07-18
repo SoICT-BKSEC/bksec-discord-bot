@@ -22,6 +22,9 @@ export interface EnvConfig {
   GITHUB_TOKEN: string;
   GH_INVITE_REPO_OWNER: string;
   GH_INVITE_REPO_NAME: string;
+  VERIFY_REMOVE_ROLE_ID?: string;
+  VERIFY_GRANT_ROLE_ID?: string;
+  VERIFY_ALLOWED_ROLE_ID?: string;
 }
 
 // CTF Database types
@@ -36,6 +39,45 @@ export interface CTFData {
   archived: boolean;
   channelsPurged: boolean;
   postEndOpened: boolean;
+  starttime?: number;
+  competitionEndtime?: number;
+}
+
+export const CHALLENGE_CATEGORIES = ['web', 'pwn', 'crypto', 'rev', 'forensics', 'misc'] as const;
+
+export type ChallengeCategory = (typeof CHALLENGE_CATEGORIES)[number];
+export type ChallengeStatus = 'unclaimed' | 'working' | 'idea' | 'solved';
+
+export interface CTFChallenge {
+  id: number;
+  ctfId: number;
+  threadId: string;
+  channelId: string;
+  name: string;
+  category: ChallengeCategory;
+  points: number;
+  status: ChallengeStatus;
+  claimantIds: string[];
+  /** Legacy single-claim field retained for migration compatibility. */
+  claimedBy?: string;
+  claimedAt?: number;
+  solverIds: string[];
+  solvedBy?: string;
+  solvedAt?: number;
+  writeupOwner?: string;
+  writeupUrl?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface SolvedChallenge {
+  id: number;
+  ctfId: number;
+  threadId: string;
+  challengeName: string;
+  solverIds: string[];
+  solvedBy: string;
+  solvedAt: number;
 }
 
 export type TaskCategory = 'pwn' | 'rev' | 'crypto' | 'all';
@@ -97,13 +139,16 @@ export interface CTFTimeEvent {
   restrictions: string;
 }
 
-export interface CTFTimeEventsResponse extends Array<CTFTimeEvent> {}
+export type CTFTimeEventsResponse = CTFTimeEvent[];
 
 // CTF Service return types
 export interface CTFInfo {
   title: string;
   startTime: number;
+  /** Actual competition end time. */
   endTime: number;
+  /** Time at which the Discord category may be archived. */
+  archiveAt: number;
   embedData: CTFEmbedData;
 }
 

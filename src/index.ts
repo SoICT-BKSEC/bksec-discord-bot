@@ -1,8 +1,16 @@
-import { Client, GatewayIntentBits, Collection, REST, Routes, ChatInputCommandInteraction } from 'discord.js';
+import {
+  Client,
+  GatewayIntentBits,
+  Collection,
+  REST,
+  Routes,
+  ChatInputCommandInteraction,
+} from 'discord.js';
 import { config } from './config/env';
 import logger from './utils/logger';
 import { handleReady } from './events/ready';
 import { handleButtonInteraction } from './components/buttons';
+import { handleChallengeMessage } from './events/message-create';
 import { Command } from './types';
 
 // Import all commands
@@ -14,8 +22,12 @@ import ctRegacc from './commands/ctftime/regacc';
 import cList from './commands/general/list';
 import cView from './commands/general/view';
 import cWhoami from './commands/general/whoami';
-import cVerify from './commands/general/verify';
-import cInviteRepoWuGcsb from './commands/general/invite-repo-wu-gcsb';
+// Non-CTF integrations are temporarily disabled while the core CTF workflow is tested.
+// import cVerify from './commands/general/verify';
+// import cInviteRepoWuGcsb from './commands/general/invite-repo-wu-gcsb';
+import cSolve from './commands/general/solve';
+import cChallenge from './commands/general/challenge';
+import cWriteup from './commands/general/writeup';
 import adminHide from './commands/admin/hide';
 import adminRegSpecial from './commands/admin/reg-special';
 import adminDelete from './commands/admin/delete';
@@ -23,6 +35,7 @@ import adminAdd from './commands/admin/add';
 import adminDenyRole from './commands/admin/deny-role';
 import adminVerifyG10 from './commands/admin/verifyg10';
 import adminFix from './commands/admin/fix';
+import adminUnsolve from './commands/admin/unsolve';
 // TODO: RE-ENABLE TASK COMMANDS — disabled because required env vars
 // (ADMIN_ROLE_ID, TASK_ADMIN_CHANNEL_ID, TASK_ROLE_*) are not set.
 // To turn back on:
@@ -67,15 +80,21 @@ const commands: Command[] = [
   cList,
   cView,
   cWhoami,
-  cVerify,
-  cInviteRepoWuGcsb,
+  // cVerify,
+  // cInviteRepoWuGcsb,
+  cSolve,
+  cChallenge,
+  cWriteup,
   adminHide,
   adminRegSpecial,
   adminDelete,
   adminAdd,
   adminDenyRole,
-  adminVerifyG10,
   adminFix,
+  adminUnsolve,
+  ...(config.VERIFY_REMOVE_ROLE_ID && config.VERIFY_GRANT_ROLE_ID && config.VERIFY_ALLOWED_ROLE_ID
+    ? [adminVerifyG10]
+    : []),
   // TODO: RE-ENABLE TASK COMMANDS (see top of file)
   // taskIssue,
   // taskSubmit,
@@ -97,8 +116,10 @@ async function deployCommands() {
     const rest = new REST({ version: '10' }).setToken(config.BOT_TOKEN);
 
     const commandData = commands.map((cmd) => cmd.data.toJSON());
+    const applicationId = client.application?.id ?? client.user?.id;
+    if (!applicationId) throw new Error('Discord application ID is unavailable');
 
-    await rest.put(Routes.applicationGuildCommands(client.user!.id, config.SERVER_ID), {
+    await rest.put(Routes.applicationGuildCommands(applicationId, config.SERVER_ID), {
       body: commandData,
     });
 
@@ -132,17 +153,20 @@ client.on('interactionCreate', async (interaction) => {
       await command.execute(interaction as ChatInputCommandInteraction);
     } else if (interaction.isButton()) {
       await handleButtonInteraction(interaction);
-    // TODO: RE-ENABLE TASK COMMANDS — uncomment these handlers (see top of file)
-    // } else if (interaction.isStringSelectMenu()) {
-    //   await handleTaskSelectInteraction(interaction);
-    // } else if (interaction.isModalSubmit()) {
-    //   await handleTaskModalInteraction(interaction);
+      // TODO: RE-ENABLE TASK COMMANDS — uncomment these handlers (see top of file)
+      // } else if (interaction.isStringSelectMenu()) {
+      //   await handleTaskSelectInteraction(interaction);
+      // } else if (interaction.isModalSubmit()) {
+      //   await handleTaskModalInteraction(interaction);
     }
   } catch (error) {
     logger.error('Error handling interaction:', error);
 
     if (interaction.isRepliable()) {
-      const errorMessage = { content: 'There was an error executing this command!', ephemeral: true };
+      const errorMessage = {
+        content: 'There was an error executing this command!',
+        ephemeral: true,
+      };
 
       if (interaction.replied || interaction.deferred) {
         await interaction.followUp(errorMessage);
@@ -151,6 +175,10 @@ client.on('interactionCreate', async (interaction) => {
       }
     }
   }
+});
+
+client.on('messageCreate', async (message) => {
+  await handleChallengeMessage(message);
 });
 
 /**
