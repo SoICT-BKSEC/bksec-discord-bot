@@ -12,7 +12,7 @@ Information commands are available to server members. Challenge-management and s
 |---------|-------------|---------|
 | `/whoami` | Display bot info: uptime, memory usage, CTF counts | — |
 | `/c-list` | List all CTFs registered in the server | `order` (Mới nhất / Cũ nhất), `page`, `step` |
-| `/c-view` | Toggle visibility of a CTF's discussion channels (add/remove role) | `ctf-name` *(role, required)* |
+| `/c-view` | Add/remove a per-CTF role for post-event channel access | `ctf-name` *(role, required)* |
 | `/solve` | Mark the current challenge thread as solved and announce the CTF solved list | `members` *(mentions or Discord IDs, required)* |
 | `/challenge create` | Create a tracked challenge thread | `name`, `category`, `points` |
 | `/challenge claim` | Join the claimant list for the current challenge | — |
@@ -42,6 +42,12 @@ Information commands are available to server members. Challenge-management and s
 | `order` | Choice | Mới nhất | Sort order: newest first or oldest first |
 | `page` | Integer | 1 | Page number |
 | `step` | Integer | 5 | Results per page |
+
+### `/c-view` behavior
+
+- Adds or removes the role selected by `ctf-name`.
+- While a CTF is live, visibility is controlled by `ACTIVE_CTF_ROLEID`; the per-CTF role does not grant live access.
+- After the competition ends, the scheduler grants category visibility to the per-CTF role and `VIEW_ALL_CTF_ROLEID` while keeping `@everyone` denied.
 
 ---
 
@@ -95,7 +101,7 @@ Restricted to users with the configured admin role or Discord Administrator perm
 |---------|-------------|---------|
 | `/admin-add` | Manually register an existing Discord category as a CTF in the database | `cate_id` *(optional, auto-detected)* |
 | `/admin-delete` | Delete a CTF — prompts to choose between full delete or keep channels | `search_id` *(CTFTime ID or Category ID, required)* |
-| `/admin-hide` | Manually archive all CTFs that have passed their end time | — |
+| `/admin-hide` | Manually archive all CTFs that have passed their archive time | — |
 | `/admin-deny-role` | Apply `ViewChannel: false` for `DENY_CTF_ROLEID` across all CTF categories | — |
 | `/admin-fix` | Rebuild category/channel permissions for live, ended, and archived CTFs | — |
 | `/admin-reg_special` | Register a CTF that is not on CTFTime (manual setup) | `name`, `hide_after` *(days, required)* |
@@ -164,6 +170,7 @@ These commands are fully implemented but currently disabled until the required e
 |----------|----------|---------|
 | `BOT_TOKEN` | Yes | Bot login |
 | `SERVER_ID` | Yes | Guild command deployment |
+| `DB_PATH` | No | SQLite path; defaults to `./ctf.db` |
 | `VERIFIED_ROLE_ID` | No / disabled | HTB enrollment is temporarily disabled |
 | `GITHUB_TOKEN` | No / disabled | GitHub integration is temporarily disabled |
 | `GH_INVITE_REPO_OWNER` | No / disabled | GitHub integration is temporarily disabled |

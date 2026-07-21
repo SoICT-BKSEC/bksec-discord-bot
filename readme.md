@@ -8,7 +8,7 @@ Hweplir is a Discord bot for managing CTF participation in one server. It is wri
 - Registers a CTF into the Discord server.
 - Creates a Discord category, CTF role, info channel, and challenge channels.
 - Stores CTF metadata, Discord IDs, archive time, and archive state in SQLite.
-- Lists registered CTFs and lets users show or hide CTF channels for themselves.
+- Lists registered CTFs and lets users opt in or out of post-event access with a per-CTF role.
 - Lets administrators update shared login information; passwords use Discord spoilers and are removed automatically when the competition ends.
 - Opens archive-role access at competition end and archives CTFtime categories after a seven-day grace period.
 - Supports manually-created CTF categories that are not on CTFtime.
@@ -21,48 +21,85 @@ Hweplir is a Discord bot for managing CTF participation in one server. It is wri
 
 ## Commands
 
+Slash commands are deployed to the guild configured by `SERVER_ID` whenever the bot starts.
+In the tables below, `<value>` is required and `[value]` is optional. See
+[`docs/commands.md`](docs/commands.md) for detailed behavior.
+
 ### CTFtime commands
 
-| Command | Purpose |
-| --- | --- |
-| `/ct-info_find` | Search CTFtime by event ID or event name. |
-| `/ct-info_ongo` | Show currently ongoing CTFs. |
-| `/ct-info_upco` | Show upcoming CTFs with pagination. |
-| `/ct-reg` | Register a CTF from a CTFtime event ID. |
-| `/ct-regacc` | Update account credentials for a registered CTF. |
+| Command | Access | Purpose |
+| --- | --- | --- |
+| `/ct-info_find <search-key>` | Member | Search CTFtime by event ID or event name. |
+| `/ct-info_ongo` | Member | Show currently ongoing CTFs. |
+| `/ct-info_upco [page] [step]` | Member | Show upcoming CTFs with pagination. |
+| `/ct-reg <ctftime-id>` | Admin | Register a CTF from CTFtime and create its Discord resources. |
+| `/ct-regacc <username> <password> [cate_id]` | Admin | Update shared credentials in the private CTF information message. |
 
 `/ct-reg` and `/ct-regacc` require `ADMIN_ROLE_ID` or Discord Administrator permission.
 
 ### General commands
 
-| Command | Purpose |
-| --- | --- |
-| `/c-list` | List registered CTFs from the local database. |
-| `/c-view` | Toggle access to a registered CTF category by adding/removing its role. |
-| `/solve` | Mark the current challenge thread as solved and announce the solved roster. |
-| `/challenge` | Create, claim, release, and track challenge threads. |
-| `/writeup` | Claim and submit writeups for solved challenges. |
-| `/whoami` | Show bot information and runtime statistics. |
+| Command | Access | Purpose |
+| --- | --- | --- |
+| `/whoami` | Member | Show bot information, uptime, memory usage, and CTF counts. |
+| `/c-list [order] [page] [step]` | Member | List registered CTFs from the local database. |
+| `/c-view <ctf-name>` | Member | Add or remove the selected per-CTF role. This role grants post-event access; live access is controlled by `ACTIVE_CTF_ROLEID`. |
+
+### Challenge commands
+
+Challenge-management commands must be used in a registered CTF category. Except for writeup commands, they require `ACTIVE_CTF_ROLEID` or Discord Administrator permission.
+
+| Command | Where | Purpose |
+| --- | --- | --- |
+| `/challenge create <name> <category> [points]` | Matching `web`, `crypto`, `pwn`, `rev`, `forensics`, or `misc` channel | Create a tracked challenge thread. |
+| `/challenge claim` | Challenge thread | Add yourself to the claimant list. |
+| `/challenge release` | Challenge thread | Remove yourself from the claimant list. |
+| `/challenge status <value>` | Challenge thread | Set the state to `working`, `idea`, or `unclaimed`. |
+| `/challenge dashboard` | Registered CTF channel or challenge thread | Create or refresh the pinned progress dashboard. |
+| `/solve <members> [points]` | Challenge thread | Store the solver list, mark the challenge solved, rename the thread, refresh the dashboard, and announce the solve. |
+| `/writeup claim` | Solved challenge thread | Claim responsibility for the challenge writeup. |
+| `/writeup submit <url>` | Solved challenge thread | Submit an HTTP(S) writeup or pull-request URL; only the claimant can submit it. |
+
+Sending the first member message in an unsolved challenge thread automatically adds that member to the claimant list. If the thread was created manually in a challenge channel, the bot registers it before adding the claimant. Multiple members may claim the same challenge.
 
 ### Admin commands
 
+These commands require `ADMIN_ROLE_ID` or Discord Administrator permission unless noted otherwise.
+
 | Command | Purpose |
 | --- | --- |
-| `/admin-hide` | Archive expired CTF categories immediately. |
-| `/admin-reg_special` | Create a manual CTF category that is not from CTFtime. |
-| `/admin-delete` | Delete a CTF record and optionally its Discord objects. |
-| `/admin-add` | Add an existing Discord category to the CTF database. |
+| `/admin-hide` | Immediately process CTF categories that have passed their archive time. |
+| `/admin-reg_special <name> <hide_after>` | Register a manual CTF that is not listed on CTFtime. |
+| `/admin-delete <search_id>` | Find a CTF by CTFtime/category ID and choose whether to delete everything or keep its channels private. |
+| `/admin-add [cate_id]` | Import an existing Discord category into the CTF database; the current category is used when omitted. |
 | `/admin-deny-role` | Deny the configured deny role from viewing existing CTF categories. |
-| `/admin-fix` | Rebuild lifecycle permissions for all tracked CTF categories. |
+| `/admin-fix` | Rebuild lifecycle permissions for live, ended, and archived CTF categories. |
 | `/admin-unsolve` | Undo an accidental challenge solve. |
-| `/verifyg10` | Optional role-verification command; registered only when its three role IDs are configured. |
+| `/verifyg10 <user>` | Swap the configured guest/member roles; authorization uses `VERIFY_ALLOWED_ROLE_ID`. |
+
+`/verifyg10` is registered only when `VERIFY_REMOVE_ROLE_ID`, `VERIFY_GRANT_ROLE_ID`, and `VERIFY_ALLOWED_ROLE_ID` are all configured.
+
+### Disabled club-task commands
+
+The older training-task workflow is implemented but not currently registered, so `/issue-task`, `/submit`, `/task-status`, and `/show-all` do not appear in Discord. Its `TASK_ADMIN_CHANNEL_ID` and `TASK_ROLE_*` variables are not required for the core CTF workflow.
+
+## CTF lifecycle
+
+1. **Live:** `@everyone` is denied and `ACTIVE_CTF_ROLEID` can view the category. The per-CTF role and `VIEW_ALL_CTF_ROLEID` do not grant live access.
+2. **Competition ended:** the scheduler removes shared credentials, keeps `@everyone` denied, and grants the per-CTF role plus `VIEW_ALL_CTF_ROLEID`. It also posts the end reminder and refreshes the dashboard.
+3. **Archive time reached:** CTFtime events are archived seven days after the competition ends. Manual events use the `hide_after` value supplied to `/admin-reg_special`.
+
+The scheduler runs every five minutes. Reminder delivery is persisted in SQLite, so restarting the bot does not duplicate already-sent 24-hour, 1-hour, start, 3-hours-left, 1-hour-left, or end notifications. Notifications and completed writeups are sent to the read-only `announcements` channel.
 
 ## Runtime requirements
 
 - Bun
 - Dependencies from `package.json`
 - A Discord bot token
-- A Discord server where the bot can manage slash commands, roles, channels, and scheduled events
+- The **Message Content Intent** enabled in the Discord Developer Portal (used for automatic challenge claiming)
+- A Discord server where the bot can manage roles, channels, messages, threads, and scheduled events
+
+The bot role must be above every role it creates, grants, removes, or deletes. Its channel permissions should include View Channels, Manage Channels, Send Messages, Embed Links, Read Message History, Manage Messages, Create Public Threads, Send Messages in Threads, and Manage Threads.
 
 Required environment variables:
 
@@ -77,6 +114,7 @@ ADMIN_ROLE_ID=role_allowed_to_manage_ctfs
 Optional environment variables:
 
 ```env
+DB_PATH=optional_sqlite_database_path
 LOG_CHANNELID=channel_for_bot_logs
 DENY_CTF_ROLEID=role_blocked_from_ctf_categories
 VERIFY_REMOVE_ROLE_ID=optional_guest_role
@@ -112,6 +150,18 @@ bun run test:smoke  # optional live CTFtime API smoke test
 bun run lint        # lint src/ with zero warnings allowed
 bun run format      # format TypeScript and root JSON files
 ```
+
+Maintenance scripts operate on `DB_PATH` or `./ctf.db` when `DB_PATH` is unset:
+
+```bash
+bunx tsx scripts/fix-ctf-visibility.ts          # preview lifecycle permission fixes
+bunx tsx scripts/fix-ctf-visibility.ts --apply  # apply lifecycle permission fixes
+bunx tsx scripts/check-purged.ts                 # mark missing Discord categories as purged
+bunx tsx scripts/purge-stale-roles.ts            # preview orphaned per-CTF role deletion
+bunx tsx scripts/purge-stale-roles.ts --apply    # delete eligible orphaned roles
+```
+
+Stop the bot before running a script that changes the database. Always run the dry-run form first where one is available.
 
 ## Code structure
 
