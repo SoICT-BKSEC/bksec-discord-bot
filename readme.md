@@ -69,13 +69,16 @@ These commands require `ADMIN_ROLE_ID` or Discord Administrator permission unles
 | Command | Purpose |
 | --- | --- |
 | `/admin-hide` | Immediately process CTF categories that have passed their archive time. |
-| `/admin-reg_special <name> <hide_after>` | Register a manual CTF that is not listed on CTFtime. |
+| `/admin-reg_special <name> <start_at> <end_at> [hide_after]` | Register a manual CTF with its real competition schedule. |
+| `/admin-set-time <start_at> <end_at> [hide_after] [cate_id]` | Correct the schedule of an existing manual CTF and reset its persisted reminders. |
 | `/admin-delete <search_id>` | Find a CTF by CTFtime/category ID and choose whether to delete everything or keep its channels private. |
 | `/admin-add [cate_id]` | Import an existing Discord category into the CTF database; the current category is used when omitted. |
 | `/admin-deny-role` | Deny the configured deny role from viewing existing CTF categories. |
 | `/admin-fix` | Rebuild lifecycle permissions for live, ended, and archived CTF categories. |
 | `/admin-unsolve` | Undo an accidental challenge solve. |
 | `/verifyg10 <user>` | Swap the configured guest/member roles; authorization uses `VERIFY_ALLOWED_ROLE_ID`. |
+
+`start_at` and `end_at` accept `YYYY-MM-DD HH:mm` in Vietnam time (UTC+7), ISO 8601 with an explicit timezone, a Unix timestamp, or a Discord timestamp such as `<t:1786811400:F>`. `hide_after` is the number of days after the competition ends before archiving and defaults to 7.
 
 `/verifyg10` is registered only when `VERIFY_REMOVE_ROLE_ID`, `VERIFY_GRANT_ROLE_ID`, and `VERIFY_ALLOWED_ROLE_ID` are all configured.
 
@@ -87,7 +90,7 @@ The older training-task workflow is implemented but not currently registered, so
 
 1. **Live:** `@everyone` is denied and `ACTIVE_CTF_ROLEID` can view the category. The per-CTF role and `VIEW_ALL_CTF_ROLEID` do not grant live access.
 2. **Competition ended:** the scheduler removes shared credentials, keeps `@everyone` denied, and grants the per-CTF role plus `VIEW_ALL_CTF_ROLEID`. It also posts the end reminder and refreshes the dashboard.
-3. **Archive time reached:** CTFtime events are archived seven days after the competition ends. Manual events use the `hide_after` value supplied to `/admin-reg_special`.
+3. **Archive time reached:** CTFtime events are archived seven days after the competition ends. Manual events are archived `hide_after` days after their supplied `end_at` time.
 
 The scheduler runs every five minutes. Reminder delivery is persisted in SQLite, so restarting the bot does not duplicate already-sent 24-hour, 1-hour, start, 3-hours-left, 1-hour-left, or end notifications. Notifications and completed writeups are sent to the read-only `announcements` channel.
 

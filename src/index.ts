@@ -36,6 +36,7 @@ import adminDenyRole from './commands/admin/deny-role';
 import adminVerifyG10 from './commands/admin/verifyg10';
 import adminFix from './commands/admin/fix';
 import adminUnsolve from './commands/admin/unsolve';
+import adminSetTime from './commands/admin/set-time';
 // TODO: RE-ENABLE TASK COMMANDS — disabled because required env vars
 // (ADMIN_ROLE_ID, TASK_ADMIN_CHANNEL_ID, TASK_ROLE_*) are not set.
 // To turn back on:
@@ -92,6 +93,7 @@ const commands: Command[] = [
   adminDenyRole,
   adminFix,
   adminUnsolve,
+  adminSetTime,
   ...(config.VERIFY_REMOVE_ROLE_ID && config.VERIFY_GRANT_ROLE_ID && config.VERIFY_ALLOWED_ROLE_ID
     ? [adminVerifyG10]
     : []),

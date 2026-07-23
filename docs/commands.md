@@ -104,7 +104,8 @@ Restricted to users with the configured admin role or Discord Administrator perm
 | `/admin-hide` | Manually archive all CTFs that have passed their archive time | — |
 | `/admin-deny-role` | Apply `ViewChannel: false` for `DENY_CTF_ROLEID` across all CTF categories | — |
 | `/admin-fix` | Rebuild category/channel permissions for live, ended, and archived CTFs | — |
-| `/admin-reg_special` | Register a CTF that is not on CTFTime (manual setup) | `name`, `hide_after` *(days, required)* |
+| `/admin-reg_special` | Register a CTF that is not on CTFTime using its real schedule | `name`, `start_at`, `end_at` *(required)*; `hide_after` *(optional)* |
+| `/admin-set-time` | Correct an existing manual CTF schedule and reset its reminders | `start_at`, `end_at` *(required)*; `hide_after`, `cate_id` *(optional)* |
 | `/admin-unsolve` | Undo an accidental solve in the current challenge thread | — |
 | `/verifyg10` | Verify a user into G10: swap guest role for member role | `user` *(required)* |
 
@@ -119,7 +120,22 @@ Shows a confirmation embed with two buttons:
 | Option | Type | Required | Description |
 |--------|------|----------|-------------|
 | `name` | String | Yes | CTF name to create |
-| `hide_after` | Integer (≥1) | Yes | Days until the category is automatically hidden |
+| `start_at` | String | Yes | Actual competition start time |
+| `end_at` | String | Yes | Actual competition end time; must be in the future and after `start_at` |
+| `hide_after` | Integer (0–365) | No | Days after `end_at` before archive; defaults to 7 |
+
+Time strings accept `YYYY-MM-DD HH:mm` in Vietnam time (UTC+7), ISO 8601 with an explicit timezone, Unix seconds, or Discord timestamps such as `<t:1786811400:F>`.
+
+### `/admin-set-time` options
+
+Run this command in a channel/thread belonging to the manual CTF, or supply its Discord Category ID. It updates all three lifecycle times atomically, resets previously-sent reminders, restores live permissions, refreshes the dashboard, and posts a schedule correction.
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `start_at` | String | Yes | Correct competition start time |
+| `end_at` | String | Yes | Correct competition end time |
+| `hide_after` | Integer (0–365) | No | Days after `end_at` before archive; defaults to 7 |
+| `cate_id` | String | No | Discord Category ID; auto-detected from the current channel when omitted |
 
 ### `/verifyg10` notes
 

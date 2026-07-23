@@ -500,6 +500,45 @@ class DatabaseService {
   }
 
   /**
+   * Replace a CTF schedule and clear persisted milestones atomically.
+   * This allows reminders, including `started`, to be delivered again for the corrected schedule.
+   */
+  async updateCTFSchedule(
+    key: string,
+    schedule: { startTime: number; endTime: number; archiveAt: number }
+  ): Promise<void> {
+    const id = Number(key);
+    if (!Number.isSafeInteger(id) || id <= 0) {
+      throw new Error(`Invalid CTF key: ${key}`);
+    }
+
+    try {
+      const transaction = this.db.transaction(() => {
+        const result = this.db
+          .prepare(
+            `UPDATE ctfs
+             SET starttime = ?, competition_endtime = ?, endtime = ?,
+                 post_end_opened = 0, updated_at = strftime('%s', 'now')
+             WHERE id = ?`
+          )
+          .run(schedule.startTime, schedule.endTime, schedule.archiveAt, id);
+
+        if (result.changes === 0) {
+          throw new Error(`CTF with key ${key} not found`);
+        }
+
+        this.db.prepare('DELETE FROM ctf_reminders WHERE ctf_id = ?').run(id);
+      });
+
+      transaction();
+      logger.info(`CTF schedule updated and reminders reset: ${key}`);
+    } catch (error) {
+      logger.error('Failed to update CTF schedule:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Delete CTF from database
    */
   async deleteCTF(key: string): Promise<CTFData> {

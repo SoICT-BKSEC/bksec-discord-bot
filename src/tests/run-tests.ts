@@ -10,6 +10,7 @@ const testFiles =
         'src/tests/challenge-database.test.ts',
         'src/tests/ctf-visibility.test.ts',
         'src/tests/ctf-schedule.test.ts',
+        'src/tests/ctf-datetime.test.ts',
       ];
 
 if (testFiles.length === 0) {

@@ -7,6 +7,11 @@ import logger from '../../utils/logger';
 import { config } from '../../config/env';
 import { requireAdmin } from '../../utils/role.guard';
 import challengeService from '../../services/challenge.service';
+import {
+  buildManualCTFSchedule,
+  DEFAULT_MANUAL_ARCHIVE_DAYS,
+  manualScheduleErrorMessage,
+} from '../../utils/ctf-datetime';
 
 const command: Command = {
   data: new SlashCommandBuilder()
@@ -19,13 +24,27 @@ const command: Command = {
         .setMaxLength(80)
         .setRequired(true)
     )
+    .addStringOption((option) =>
+      option
+        .setName('start_at')
+        .setDescription('Bắt đầu: YYYY-MM-DD HH:mm (UTC+7), ISO hoặc Unix timestamp')
+        .setMaxLength(64)
+        .setRequired(true)
+    )
+    .addStringOption((option) =>
+      option
+        .setName('end_at')
+        .setDescription('Kết thúc: YYYY-MM-DD HH:mm (UTC+7), ISO hoặc Unix timestamp')
+        .setMaxLength(64)
+        .setRequired(true)
+    )
     .addIntegerOption((option) =>
       option
         .setName('hide_after')
-        .setDescription('Số ngày trước khi tự động archive')
-        .setMinValue(1)
+        .setDescription('Số ngày sau khi kết thúc trước khi archive (mặc định 7)')
+        .setMinValue(0)
         .setMaxValue(365)
-        .setRequired(true)
+        .setRequired(false)
     ) as SlashCommandBuilder,
 
   async execute(interaction: ChatInputCommandInteraction) {
@@ -39,11 +58,30 @@ const command: Command = {
 
       await interaction.deferReply();
       const name = interaction.options.getString('name', true).trim();
-      const days = interaction.options.getInteger('hide_after', true);
+      const startInput = interaction.options.getString('start_at', true);
+      const endInput = interaction.options.getString('end_at', true);
+      const days = interaction.options.getInteger('hide_after') ?? DEFAULT_MANUAL_ARCHIVE_DAYS;
       if (!name) {
         await interaction.editReply({ embeds: [errorEmbed('Tên CTF không được để trống.')] });
         return;
       }
+
+      const scheduleResult = buildManualCTFSchedule(startInput, endInput, days);
+      if (!scheduleResult.ok) {
+        await interaction.editReply({
+          embeds: [errorEmbed(manualScheduleErrorMessage(scheduleResult.error))],
+        });
+        return;
+      }
+      const schedule = scheduleResult.schedule;
+      const now = Math.floor(Date.now() / 1000);
+      if (schedule.endTime <= now) {
+        await interaction.editReply({
+          embeds: [errorEmbed('Giờ kết thúc phải nằm trong tương lai.')],
+        });
+        return;
+      }
+
       const duplicate = (await databaseService.getAllCTFs()).some(
         (ctf) => ctf.data.name.toLocaleLowerCase() === name.toLocaleLowerCase()
       );
@@ -63,8 +101,6 @@ const command: Command = {
       const { category, role, infoChannel, generalChannel } = created;
       createdCategoryId = category.id;
       createdRoleId = role.id;
-      const now = Math.floor(Date.now() / 1000);
-      const endTime = now + 86400 * days;
 
       try {
         databaseId = await databaseService.addCTF({
@@ -74,9 +110,9 @@ const command: Command = {
           name,
           infom: '0',
           channel: infoChannel.id,
-          endtime: endTime,
-          starttime: now,
-          competitionEndtime: endTime,
+          endtime: schedule.archiveAt,
+          starttime: schedule.startTime,
+          competitionEndtime: schedule.endTime,
         });
       } catch (error) {
         logger.error(`Core manual registration failed for ${name}:`, error);
@@ -115,6 +151,8 @@ const command: Command = {
         embeds: [
           successEmbed(
             `Đã tạo channel cho <***${name}***>.\n` +
+              `Bắt đầu: <t:${schedule.startTime}:F> · Kết thúc: <t:${schedule.endTime}:F>.\n` +
+              `Archive: <t:${schedule.archiveAt}:F>.\n` +
               `Đăng thông tin tại <#${infoChannel.id}>; thảo luận tại <#${generalChannel.id}>.` +
               (archiveFailed ? `\nAuto-archive failed: ${archiveFailed}` : '')
           ),
@@ -126,13 +164,15 @@ const command: Command = {
         if (logChannel?.isTextBased()) {
           await logChannel
             .send(
-              `${interaction.user.username} manually created ***${name}***; auto-archived=${archived}, failed=${archiveFailed}`
+              `${interaction.user.username} manually created ***${name}***; start=${schedule.startTime}, end=${schedule.endTime}, archive=${schedule.archiveAt}; auto-archived=${archived}, failed=${archiveFailed}`
             )
             .catch((error) => logger.warn('Could not write manual registration log:', error));
         }
       }
 
-      logger.info(`User ${interaction.user.tag} created special CTF: ${name} (${days} days)`);
+      logger.info(
+        `User ${interaction.user.tag} created special CTF: ${name} (${schedule.startTime}-${schedule.endTime}, archive +${days} days)`
+      );
     } catch (error) {
       logger.error('Error in admin-reg_special command:', error);
       if (databaseId === undefined && interaction.guild && (createdCategoryId || createdRoleId)) {

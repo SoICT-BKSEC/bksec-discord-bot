@@ -103,6 +103,23 @@ async function run(): Promise<void> {
     await databaseService.removeReminder(ctfId, 'started');
     assert.equal(await databaseService.markReminderSent(ctfId, 'started'), true);
 
+    await databaseService.updateCTF(String(ctfId), { postEndOpened: true });
+    await databaseService.updateCTFSchedule(String(ctfId), {
+      startTime: 1_000,
+      endTime: 2_000,
+      archiveAt: 3_000,
+    });
+    const rescheduledCTF = await databaseService.findByKey(String(ctfId));
+    assert.equal(rescheduledCTF?.data.starttime, 1_000);
+    assert.equal(rescheduledCTF?.data.competitionEndtime, 2_000);
+    assert.equal(rescheduledCTF?.data.endtime, 3_000);
+    assert.equal(rescheduledCTF?.data.postEndOpened, false);
+    assert.equal(
+      await databaseService.markReminderSent(ctfId, 'started'),
+      true,
+      'rescheduling should clear persisted milestones'
+    );
+
     console.log('challenge database tests passed');
   } finally {
     databaseService.close();
