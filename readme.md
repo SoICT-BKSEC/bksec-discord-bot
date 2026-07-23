@@ -33,9 +33,10 @@ In the tables below, `<value>` is required and `[value]` is optional. See
 | `/ct-info_ongo` | Member | Show currently ongoing CTFs. |
 | `/ct-info_upco [page] [step]` | Member | Show upcoming CTFs with pagination. |
 | `/ct-reg <ctftime-id>` | Admin | Register a CTF from CTFtime and create its Discord resources. |
-| `/ct-regacc <username> <password> [cate_id]` | Admin | Update shared credentials in the private CTF information message. |
+| `/ct-regacc <username> <password> [cate_id]` | Admin | Create or update shared credentials for either a CTFtime or manual CTF in its private information channel. |
 
 `/ct-reg` and `/ct-regacc` require `ADMIN_ROLE_ID` or Discord Administrator permission.
+For manual events, `/ct-regacc` creates and pins a dedicated account message, stores its message ID, and removes the credentials automatically when the competition ends. Credentials are never posted to the `announcements` channel.
 
 ### General commands
 

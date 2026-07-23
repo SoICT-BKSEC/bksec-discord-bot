@@ -18,6 +18,7 @@ import {
   fuzzyMatch,
 } from '../utils/helpers';
 import logger from '../utils/logger';
+import { buildLoginField } from '../utils/ctf-credentials';
 import databaseService from './database.service';
 
 const CTFTIME_API_BASE = 'https://ctftime.org/api/v1';
@@ -98,15 +99,7 @@ class CTFTimeService {
       const fields: Array<{ name: string; value: string; inline?: boolean }> = [];
 
       if (creating) {
-        const safeUsername = username?.replace(/`/g, 'ˋ');
-        const safePassword = password?.replace(/\|/g, '∣');
-        fields.push({
-          name: 'Login',
-          value:
-            safeUsername && safePassword
-              ? `Username: \`${safeUsername}\`\nPassword: ||${safePassword}||`
-              : 'Đang chờ quản trị viên cập nhật bằng `/ct-regacc`.',
-        });
+        fields.push(buildLoginField(username, password));
       }
 
       fields.push({

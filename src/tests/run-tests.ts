@@ -11,6 +11,7 @@ const testFiles =
         'src/tests/ctf-visibility.test.ts',
         'src/tests/ctf-schedule.test.ts',
         'src/tests/ctf-datetime.test.ts',
+        'src/tests/ctf-credentials.test.ts',
       ];
 
 if (testFiles.length === 0) {

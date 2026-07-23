@@ -1,11 +1,12 @@
 import { ChannelType, ChatInputCommandInteraction, SlashCommandBuilder } from 'discord.js';
-import { Command } from '../../types';
+import { Command, CTFEmbedData } from '../../types';
 import ctftimeService from '../../services/ctftime.service';
 import databaseService from '../../services/database.service';
 import { createEmbed, errorEmbed, successEmbed } from '../../utils/embed.builder';
 import logger from '../../utils/logger';
 import { config } from '../../config/env';
 import { requireAdmin } from '../../utils/role.guard';
+import { buildManualCredentialEmbed } from '../../utils/ctf-credentials';
 
 async function currentCategoryId(interaction: ChatInputCommandInteraction): Promise<string | null> {
   const channel = interaction.channel;
@@ -23,7 +24,7 @@ async function currentCategoryId(interaction: ChatInputCommandInteraction): Prom
 const command: Command = {
   data: new SlashCommandBuilder()
     .setName('ct-regacc')
-    .setDescription('[CTFTime] Cập nhật tài khoản dùng chung của CTF')
+    .setDescription('Cập nhật tài khoản dùng chung của CTFTime hoặc CTF thủ công')
     .addStringOption((option) =>
       option
         .setName('username')
@@ -72,14 +73,24 @@ const command: Command = {
       }
 
       const ctf = await databaseService.findByCategoryId(categoryId);
-      if (!ctf || ctf.data.ctftimeid === 0) {
+      if (!ctf) {
         await interaction.editReply({
-          embeds: [errorEmbed('CTFTime event không tồn tại trong DB.')],
+          embeds: [errorEmbed('CTF không tồn tại trong database.')],
         });
         return;
       }
 
       const competitionEnd = ctf.data.competitionEndtime || ctf.data.endtime;
+      if (competitionEnd <= 0) {
+        await interaction.editReply({
+          embeds: [
+            errorEmbed(
+              'CTF chưa có giờ kết thúc hợp lệ. Hãy dùng `/admin-set-time` trước khi cấp credentials.'
+            ),
+          ],
+        });
+        return;
+      }
       if (competitionEnd > 0 && Math.floor(Date.now() / 1000) >= competitionEnd) {
         await interaction.editReply({
           embeds: [errorEmbed('Không thể cập nhật credentials sau khi giải đã kết thúc.')],
@@ -87,10 +98,16 @@ const command: Command = {
         return;
       }
 
-      const result = await ctftimeService.getCTF(ctf.data.ctftimeid, true, username, password);
-      if (!result || !('archiveAt' in result)) {
-        await interaction.editReply({ embeds: [errorEmbed('Failed to fetch CTF info')] });
-        return;
+      let embedData: CTFEmbedData;
+      if (ctf.data.ctftimeid === 0) {
+        embedData = buildManualCredentialEmbed(ctf.data, username, password);
+      } else {
+        const result = await ctftimeService.getCTF(ctf.data.ctftimeid, true, username, password);
+        if (!result || !('archiveAt' in result)) {
+          await interaction.editReply({ embeds: [errorEmbed('Failed to fetch CTF info')] });
+          return;
+        }
+        embedData = result.embedData;
       }
 
       const infoChannel = await interaction.guild.channels
@@ -101,17 +118,33 @@ const command: Command = {
         return;
       }
 
-      const message = await infoChannel.messages.fetch(ctf.data.infom).catch(() => null);
-      if (!message) {
-        await interaction.editReply({ embeds: [errorEmbed('Info message not found')] });
-        return;
+      let message =
+        ctf.data.infom !== '0'
+          ? await infoChannel.messages.fetch(ctf.data.infom).catch(() => null)
+          : null;
+      let createdMessage = false;
+
+      if (message) {
+        await message.edit({ embeds: [createEmbed(embedData)] });
+      } else {
+        message = await infoChannel.send({ embeds: [createEmbed(embedData)] });
+        createdMessage = true;
+        try {
+          await databaseService.updateCTF(ctf.key, { infom: message.id });
+        } catch (error) {
+          await message.delete().catch(() => undefined);
+          throw error;
+        }
       }
 
-      await message.edit({ embeds: [createEmbed(result.embedData)] });
+      await message.pin().catch((error) => {
+        logger.warn(`Could not pin credential message for ${ctf.data.name}:`, error);
+      });
       await interaction.editReply({
         embeds: [
           successEmbed(
-            `Đã cập nhật login của <***${ctf.data.name}***>. Mật khẩu được ẩn bằng spoiler và sẽ tự xoá khi giải kết thúc.`
+            `Đã ${createdMessage ? 'tạo' : 'cập nhật'} login của <***${ctf.data.name}***> tại <#${infoChannel.id}>. ` +
+              'Mật khẩu được ẩn bằng spoiler và sẽ tự xoá khi giải kết thúc.'
           ),
         ],
       });

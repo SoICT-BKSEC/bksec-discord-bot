@@ -58,7 +58,7 @@ Pull competition info from CTFTime and manage CTF channels in the server.
 | Command | Description | Options |
 |---------|-------------|---------|
 | `/ct-reg` | **Admin:** register a new CTF from CTFTime — creates category, role, channels, dashboard, and scheduled event | `ctftime-id` *(required)* |
-| `/ct-regacc` | **Admin:** update shared credentials in the private pinned info message | `username`, `password` *(required)*; `cate_id` *(optional)* |
+| `/ct-regacc` | **Admin:** create/update shared credentials for CTFtime or manual CTFs in the private pinned info message | `username`, `password` *(required)*; `cate_id` *(optional)* |
 | `/ct-info_find` | Look up a CTF by CTFTime ID or name | `search-key` *(required)* |
 | `/ct-info_ongo` | Show currently ongoing CTFs from CTFTime | — |
 | `/ct-info_upco` | Show upcoming CTFs from CTFTime (paginated) | `page`, `step` |
@@ -82,7 +82,7 @@ The command requires `ADMIN_ROLE_ID` or Discord Administrator permission. If reg
 | `password` | String | Yes | CTF account password |
 | `cate_id` | String | No | Discord Category ID (auto-detected from current channel if omitted) |
 
-The command is admin-only. The password is rendered as a Discord spoiler while the CTF is active and the bot removes the login field before opening post-event access.
+The command is admin-only. For a manual/non-CTFtime event, it creates a dedicated pinned account message the first time and updates that same message on later calls. The event must have a valid end time; use `/admin-set-time` first for imported categories without a schedule. The password is rendered as a Discord spoiler while the CTF is active, is never posted to `announcements`, and is removed automatically before post-event access opens.
 
 ### `/ct-info_upco` options
 
