@@ -13,27 +13,28 @@ Information commands are available to server members. Challenge-management and s
 | `/whoami` | Display bot info: uptime, memory usage, CTF counts | — |
 | `/c-list` | List all CTFs registered in the server | `order` (Mới nhất / Cũ nhất), `page`, `step` |
 | `/c-view` | Add/remove a per-CTF role for post-event channel access | `ctf-name` *(role, required)* |
-| `/solve` | Mark the current challenge thread as solved and announce the CTF solved list | `members` *(mentions or Discord IDs, required)* |
-| `/challenge create` | Create a tracked challenge thread | `name`, `category`, `points` |
+| `/solved` | Mark the current challenge thread as solved and post a congratulations message | — |
+| `/challenge create` | Create a tracked challenge thread | `name`; `extra_category`, `points` *(optional)* |
 | `/challenge claim` | Join the claimant list for the current challenge | — |
 | `/challenge release` | Remove yourself from the claimant list | — |
 | `/challenge status` | Set working/idea/unclaimed status | `value` |
 | `/challenge dashboard` | Create or refresh the pinned CTF dashboard | — |
-| `/writeup claim` | Claim the writeup task created after a solve | — |
+| `/writeup claim` | Claim the writeup for a solved challenge | — |
 | `/writeup submit` | Submit the writeup or pull-request URL | `url` |
 
-### `/solve` behavior
+### `/solved` behavior
 
 - Must be run inside a thread under a registered CTF category.
 - Requires `ACTIVE_CTF_ROLEID` (Discord administrators are also accepted).
-- Supports an optional `points` override, tracks category first blood, and stores the solve in SQLite.
-- Renames the thread with `[SOLVED]`, refreshes the pinned dashboard, and opens a writeup task.
+- Does not require or publish a solver list.
+- Renames the thread with `[SOLVED]`, refreshes the pinned dashboard, and posts a congratulations message in `announcements`.
 - A five-minute scheduler sends 24h/1h/start/3h-left/1h-left/end reminders and refreshes the countdown dashboard.
 - CTF registration creates and pins the dashboard in the CTF-named info channel immediately.
 - Completed challenges, completed writeups, and lifecycle reminders are posted to the dedicated `announcements` channel; discussion stays in `general`.
 - The dashboard title includes current progress as `solved/total`.
 - A member's first message in a challenge thread automatically joins them to its multi-user claimant list. Manually-created threads inside a registered CTF category are registered automatically on that first message.
 - Thread names use standardized states: `[OPEN]`, `[ACTIVE]`, `[LEAD]`, and `[SOLVED]`.
+- `/challenge create` infers the primary category from the current channel; `extra_category` may add one different category.
 
 ### `/c-list` options
 

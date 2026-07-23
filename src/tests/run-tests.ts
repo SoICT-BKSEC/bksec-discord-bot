@@ -8,6 +8,8 @@ const testFiles =
     : [
         'src/tests/task-database.test.ts',
         'src/tests/challenge-database.test.ts',
+        'src/tests/challenge-category-migration.test.ts',
+        'src/tests/challenge-command-schema.test.ts',
         'src/tests/ctf-visibility.test.ts',
         'src/tests/ctf-schedule.test.ts',
         'src/tests/ctf-datetime.test.ts',

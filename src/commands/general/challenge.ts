@@ -17,10 +17,11 @@ import { config } from '../../config/env';
 import { requireRole } from '../../utils/role.guard';
 import { errorEmbed, successEmbed, warningEmbed } from '../../utils/embed.builder';
 import logger from '../../utils/logger';
-
-function isChallengeCategory(value: string): value is ChallengeCategory {
-  return CHALLENGE_CATEGORIES.includes(value as ChallengeCategory);
-}
+import {
+  formatChallengeCategories,
+  isChallengeCategory,
+  normalizeChallengeCategories,
+} from '../../utils/challenge-category';
 
 async function threadChallenge(interaction: ChatInputCommandInteraction) {
   return interaction.channel?.isThread()
@@ -56,9 +57,8 @@ const command: Command = {
         )
         .addStringOption((option) =>
           option
-            .setName('category')
-            .setDescription('Category')
-            .setRequired(true)
+            .setName('extra_category')
+            .setDescription('Category bổ sung; category chính được lấy từ channel hiện tại')
             .addChoices(
               ...CHALLENGE_CATEGORIES.map((category) => ({
                 name: category.toUpperCase(),
@@ -131,19 +131,14 @@ const command: Command = {
           return;
         }
 
-        const category = interaction.options.getString('category', true) as ChallengeCategory;
         const channelCategory = channel.name.toLowerCase() as ChallengeCategory;
-        if (category !== channelCategory) {
-          await interaction.reply({
-            embeds: [
-              errorEmbed(
-                `Category đã chọn là ${category.toUpperCase()}, nhưng channel hiện tại là ${channelCategory.toUpperCase()}.`
-              ),
-            ],
-            ephemeral: true,
-          });
-          return;
-        }
+        const extraCategory = interaction.options.getString(
+          'extra_category'
+        ) as ChallengeCategory | null;
+        const categories = normalizeChallengeCategories(
+          channelCategory,
+          extraCategory ? [extraCategory] : []
+        );
 
         await interaction.deferReply({ ephemeral: true });
         const name = interaction.options.getString('name', true).trim();
@@ -166,7 +161,8 @@ const command: Command = {
             threadId: thread.id,
             channelId: channel.id,
             name,
-            category,
+            category: channelCategory,
+            categories,
             points: interaction.options.getInteger('points') ?? 0,
           });
         } catch (error) {
@@ -177,7 +173,7 @@ const command: Command = {
         const introSent = await thread
           .send({
             content:
-              `Challenge **${challenge.name}** · ${category.toUpperCase()}` +
+              `Challenge **${challenge.name}** · ${formatChallengeCategories(challenge.categories)}` +
               `${challenge.points ? ` · ${challenge.points} points` : ''}\n` +
               'Gửi tin nhắn đầu tiên hoặc dùng `/challenge claim` để tham gia.',
             allowedMentions: { parse: [] },

@@ -54,7 +54,10 @@ export interface CTFChallenge {
   threadId: string;
   channelId: string;
   name: string;
+  /** Primary category inferred from the parent Discord channel. */
   category: ChallengeCategory;
+  /** Primary category followed by any optional additional categories. */
+  categories: ChallengeCategory[];
   points: number;
   status: ChallengeStatus;
   claimantIds: string[];

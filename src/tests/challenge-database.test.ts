@@ -47,9 +47,11 @@ async function run(): Promise<void> {
       channelId: '11',
       name: 'heap',
       category: 'pwn',
+      categories: ['pwn', 'web', 'pwn'],
       points: 500,
     });
     assert.equal(challenge.status, 'unclaimed');
+    assert.deepEqual(challenge.categories, ['pwn', 'web']);
 
     const firstClaim = await databaseService.addChallengeClaimant(challenge.id, '98');
     assert.equal(firstClaim.added, true);
@@ -68,23 +70,19 @@ async function run(): Promise<void> {
 
     const solved = await databaseService.solveChallenge({
       challengeId: challenge.id,
-      solverIds: ['99'],
       recordedBy: '97',
       solvedAt: 150,
-      points: 450,
     });
     assert.equal(solved.status, 'solved');
-    assert.deepEqual(solved.solverIds, ['99']);
-    assert.equal(solved.points, 450);
+    assert.deepEqual(solved.solverIds, []);
+    assert.equal(solved.points, 500);
     assert.equal((await databaseService.getSolvedChallenges(ctfId)).length, 1);
 
     await assert.rejects(
       databaseService.solveChallenge({
         challengeId: challenge.id,
-        solverIds: ['99'],
         recordedBy: '97',
         solvedAt: 151,
-        points: 450,
       }),
       /already solved/
     );

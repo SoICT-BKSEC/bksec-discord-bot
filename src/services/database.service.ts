@@ -13,6 +13,7 @@ import {
   ChallengeStatus,
 } from '../types';
 import logger from '../utils/logger';
+import { isChallengeCategory, normalizeChallengeCategories } from '../utils/challenge-category';
 
 const DB_PATH = process.env.DB_PATH ?? path.join(process.cwd(), 'ctf.db');
 
@@ -55,6 +56,7 @@ interface ChallengeRow {
   channel_id: string;
   name: string;
   category: string;
+  categories: string | null;
   points: number;
   status: string;
   claimant_ids: string | null;
@@ -238,6 +240,7 @@ class DatabaseService {
           channel_id TEXT NOT NULL,
           name TEXT NOT NULL,
           category TEXT NOT NULL,
+          categories TEXT NOT NULL DEFAULT '[]',
           points INTEGER NOT NULL DEFAULT 0,
           status TEXT NOT NULL DEFAULT 'unclaimed',
           claimed_by TEXT,
@@ -277,6 +280,7 @@ class DatabaseService {
       this.addColumnIfMissing('ctfs', 'competition_endtime', 'INTEGER NOT NULL DEFAULT 0');
       this.addColumnIfMissing('ctf_challenges', 'claimed_at', 'INTEGER');
       this.addColumnIfMissing('ctf_challenges', 'claimant_ids', "TEXT NOT NULL DEFAULT '[]'");
+      this.addColumnIfMissing('ctf_challenges', 'categories', "TEXT NOT NULL DEFAULT '[]'");
       this.db.exec(`
         UPDATE ctfs
         SET competition_endtime = CASE
@@ -291,6 +295,11 @@ class DatabaseService {
         WHERE claimed_by IS NOT NULL
           AND claimed_by != ''
           AND (claimant_ids IS NULL OR claimant_ids = '[]')
+      `);
+      this.db.exec(`
+        UPDATE ctf_challenges
+        SET categories = json_array(category)
+        WHERE categories IS NULL OR categories = '' OR categories = '[]'
       `);
 
       // Initialize counter if not exists
@@ -680,10 +689,8 @@ class DatabaseService {
 
   async solveChallenge(input: {
     challengeId: number;
-    solverIds: string[];
     recordedBy: string;
     solvedAt: number;
-    points: number;
   }): Promise<CTFChallenge> {
     const transaction = this.db.transaction(() => {
       const current = this.db
@@ -695,17 +702,11 @@ class DatabaseService {
       this.db
         .prepare(
           `UPDATE ctf_challenges
-           SET status = 'solved', solver_ids = ?, solved_by = ?, solved_at = ?,
-               points = ?, claimed_by = NULL, updated_at = strftime('%s','now')
+           SET status = 'solved', solver_ids = '[]', solved_by = ?, solved_at = ?,
+               claimed_by = NULL, updated_at = strftime('%s','now')
            WHERE id = ?`
         )
-        .run(
-          JSON.stringify(input.solverIds),
-          input.recordedBy,
-          input.solvedAt,
-          input.points,
-          input.challengeId
-        );
+        .run(input.recordedBy, input.solvedAt, input.challengeId);
 
       this.db
         .prepare(
@@ -723,7 +724,7 @@ class DatabaseService {
           current.ctf_id,
           current.thread_id,
           current.name,
-          JSON.stringify(input.solverIds),
+          '[]',
           input.recordedBy,
           input.solvedAt
         );
@@ -793,14 +794,25 @@ class DatabaseService {
     channelId: string;
     name: string;
     category: ChallengeCategory;
+    categories?: ChallengeCategory[];
     points: number;
   }): Promise<CTFChallenge> {
+    const categories = normalizeChallengeCategories(input.category, input.categories);
     const result = this.db
       .prepare(
-        `INSERT INTO ctf_challenges (ctf_id,thread_id,channel_id,name,category,points)
-         VALUES (?,?,?,?,?,?)`
+        `INSERT INTO ctf_challenges
+          (ctf_id,thread_id,channel_id,name,category,categories,points)
+         VALUES (?,?,?,?,?,?,?)`
       )
-      .run(input.ctfId, input.threadId, input.channelId, input.name, input.category, input.points);
+      .run(
+        input.ctfId,
+        input.threadId,
+        input.channelId,
+        input.name,
+        input.category,
+        JSON.stringify(categories),
+        input.points
+      );
     const challenge = await this.getChallengeById(Number(result.lastInsertRowid));
     if (!challenge) throw new Error('Inserted challenge not found');
     return challenge;
@@ -1189,6 +1201,11 @@ class DatabaseService {
   private rowToChallenge(row: ChallengeRow): CTFChallenge {
     const migratedClaimants = row.claimed_by ? [row.claimed_by] : [];
     const claimantIds = row.claimant_ids ? parseStringArray(row.claimant_ids) : migratedClaimants;
+    const primaryCategory = isChallengeCategory(row.category) ? row.category : 'misc';
+    const categories = normalizeChallengeCategories(
+      primaryCategory,
+      parseStringArray(row.categories)
+    );
 
     return {
       id: row.id,
@@ -1196,7 +1213,8 @@ class DatabaseService {
       threadId: row.thread_id,
       channelId: row.channel_id,
       name: row.name,
-      category: row.category as ChallengeCategory,
+      category: primaryCategory,
+      categories,
       points: row.points,
       status: row.status as ChallengeStatus,
       claimantIds,

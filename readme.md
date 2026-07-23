@@ -52,12 +52,12 @@ Challenge-management commands must be used in a registered CTF category. Except 
 
 | Command | Where | Purpose |
 | --- | --- | --- |
-| `/challenge create <name> <category> [points]` | Matching `web`, `crypto`, `pwn`, `rev`, `forensics`, or `misc` channel | Create a tracked challenge thread. |
+| `/challenge create <name> [extra_category] [points]` | `web`, `crypto`, `pwn`, `rev`, `forensics`, or `misc` channel | Create a tracked thread. Its primary category comes from the channel; one additional category is optional. |
 | `/challenge claim` | Challenge thread | Add yourself to the claimant list. |
 | `/challenge release` | Challenge thread | Remove yourself from the claimant list. |
 | `/challenge status <value>` | Challenge thread | Set the state to `working`, `idea`, or `unclaimed`. |
 | `/challenge dashboard` | Registered CTF channel or challenge thread | Create or refresh the pinned progress dashboard. |
-| `/solve <members> [points]` | Challenge thread | Store the solver list, mark the challenge solved, rename the thread, refresh the dashboard, and announce the solve. |
+| `/solved` | Challenge thread | Mark the challenge solved, rename the thread, refresh the dashboard, and post a congratulations message without a solver list. |
 | `/writeup claim` | Solved challenge thread | Claim responsibility for the challenge writeup. |
 | `/writeup submit <url>` | Solved challenge thread | Submit an HTTP(S) writeup or pull-request URL; only the claimant can submit it. |
 

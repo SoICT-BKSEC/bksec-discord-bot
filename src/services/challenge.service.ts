@@ -119,7 +119,9 @@ class ChallengeService {
     );
 
     const categoryLines = CHALLENGE_CATEGORIES.map((category) => {
-      const categoryChallenges = challenges.filter((challenge) => challenge.category === category);
+      const categoryChallenges = challenges.filter((challenge) =>
+        challenge.categories.includes(category)
+      );
       if (categoryChallenges.length === 0) return null;
       const categorySolved = categoryChallenges.filter(
         (challenge) => challenge.status === 'solved'
@@ -130,7 +132,7 @@ class ChallengeService {
       .join('\n');
 
     const challengeLines = challenges.map((challenge) => {
-      const members = challenge.status === 'solved' ? challenge.solverIds : challenge.claimantIds;
+      const members = challenge.status === 'solved' ? [] : challenge.claimantIds;
       const memberText = members.length ? ` — ${members.map((id) => `<@${id}>`).join(', ')}` : '';
       const points = challenge.points ? ` (${challenge.points} pts)` : '';
       return `${statusSymbols[challenge.status]} <#${challenge.threadId}>${memberText}${points}`;

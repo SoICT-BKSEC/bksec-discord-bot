@@ -38,6 +38,7 @@ export async function handleChallengeMessage(message: Message): Promise<void> {
           channelId: parent.id,
           name: cleanThreadName(thread.name) || 'untitled-challenge',
           category: inferred,
+          categories: [inferred],
           points: 0,
         });
       } catch {

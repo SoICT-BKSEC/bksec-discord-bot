@@ -109,9 +109,6 @@ const command: Command = {
           interaction.guild,
           ctf.data,
           `[WRITEUP COMPLETED] **${challenge.name}**\n` +
-            `Challenge solved by: ${
-              challenge.solverIds.map((id) => `<@${id}>`).join(', ') || 'Not recorded'
-            }\n` +
             `Written by: <@${interaction.user.id}>\n` +
             `Document: ${url}\n` +
             `Thread: <#${challenge.threadId}>`
