@@ -42,6 +42,7 @@ For manual events, `/ct-regacc` creates and pins a dedicated account message, st
 
 | Command | Access | Purpose |
 | --- | --- | --- |
+| `/help` | Member | Show a private quick-start guide for CTF, challenge, solve, and write-up commands. |
 | `/whoami` | Member | Show bot information, uptime, memory usage, and CTF counts. |
 | `/c-list [order] [page] [step]` | Member | List registered CTFs from the local database. |
 | `/c-view <ctf-name>` | Member | Add or remove the selected per-CTF role. This role grants post-event access; live access is controlled by `ACTIVE_CTF_ROLEID`. |

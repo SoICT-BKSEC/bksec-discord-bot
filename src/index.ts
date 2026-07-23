@@ -22,6 +22,7 @@ import ctRegacc from './commands/ctftime/regacc';
 import cList from './commands/general/list';
 import cView from './commands/general/view';
 import cWhoami from './commands/general/whoami';
+import cHelp from './commands/general/help';
 // Non-CTF integrations are temporarily disabled while the core CTF workflow is tested.
 // import cVerify from './commands/general/verify';
 // import cInviteRepoWuGcsb from './commands/general/invite-repo-wu-gcsb';
@@ -81,6 +82,7 @@ const commands: Command[] = [
   cList,
   cView,
   cWhoami,
+  cHelp,
   // cVerify,
   // cInviteRepoWuGcsb,
   cSolve,

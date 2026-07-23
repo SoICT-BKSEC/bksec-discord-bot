@@ -10,6 +10,7 @@ Information commands are available to server members. Challenge-management and s
 
 | Command | Description | Options |
 |---------|-------------|---------|
+| `/help` | Show a private quick-start guide for the basic bot workflow | — |
 | `/whoami` | Display bot info: uptime, memory usage, CTF counts | — |
 | `/c-list` | List all CTFs registered in the server | `order` (Mới nhất / Cũ nhất), `page`, `step` |
 | `/c-view` | Add/remove a per-CTF role for post-event channel access | `ctf-name` *(role, required)* |
