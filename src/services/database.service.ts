@@ -885,6 +885,37 @@ class DatabaseService {
     return challenge;
   }
 
+  async claimChallengeWriteup(
+    id: number,
+    userId: string
+  ): Promise<{ challenge: CTFChallenge; added: boolean }> {
+    const transaction = this.db.transaction(() => {
+      const row = this.db.prepare('SELECT * FROM ctf_challenges WHERE id = ?').get(id) as
+        ChallengeRow | undefined;
+      if (!row) throw new Error('Challenge not found');
+      if (row.status !== 'solved') throw new Error('Challenge must be solved before writeup claim');
+
+      if (row.writeup_url || row.writeup_owner) {
+        return { challenge: this.rowToChallenge(row), added: false };
+      }
+
+      this.db
+        .prepare(
+          `UPDATE ctf_challenges
+           SET writeup_owner = ?, updated_at = strftime('%s','now')
+           WHERE id = ?`
+        )
+        .run(userId, id);
+
+      const updated = this.db.prepare('SELECT * FROM ctf_challenges WHERE id = ?').get(id) as
+        ChallengeRow | undefined;
+      if (!updated) throw new Error('Updated challenge not found');
+      return { challenge: this.rowToChallenge(updated), added: true };
+    });
+
+    return transaction();
+  }
+
   async addChallengeClaimant(
     id: number,
     userId: string

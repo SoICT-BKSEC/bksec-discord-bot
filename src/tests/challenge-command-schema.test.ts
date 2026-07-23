@@ -17,6 +17,7 @@ async function run(): Promise<void> {
   try {
     const challengeCommand = (await import('../commands/general/challenge')).default.data.toJSON();
     const solveCommand = (await import('../commands/general/solve')).default.data.toJSON();
+    const writeupCommand = (await import('../commands/general/writeup')).default.data.toJSON();
     const create = challengeCommand.options?.find((option) => option.name === 'create');
     const createOptions = 'options' in (create ?? {}) ? (create?.options ?? []) : [];
     const extraCategory = createOptions.find((option) => option.name === 'extra_category');
@@ -30,6 +31,12 @@ async function run(): Promise<void> {
     assert.notEqual(extraCategory.required, true, 'extra category should be optional');
     assert.equal(solveCommand.name, 'solved', 'solve command should be registered as /solved');
     assert.deepEqual(solveCommand.options ?? [], [], '/solved should not require any options');
+
+    const submit = writeupCommand.options?.find((option) => option.name === 'submit');
+    const submitOptions = 'options' in (submit ?? {}) ? (submit?.options ?? []) : [];
+    const url = submitOptions.find((option) => option.name === 'url');
+    assert.ok(url, '/writeup submit should expose a URL option');
+    assert.equal(url.required, true, 'writeup URL should be required');
 
     console.log('challenge command schema tests passed');
   } finally {

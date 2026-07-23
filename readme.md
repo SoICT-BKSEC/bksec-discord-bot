@@ -63,6 +63,8 @@ Challenge-management commands must be used in a registered CTF category. Except 
 
 Sending the first member message in an unsolved challenge thread automatically adds that member to the claimant list. If the thread was created manually in a challenge channel, the bot registers it before adding the claimant. Multiple members may claim the same challenge.
 
+After `/solved`, the bot posts a write-up task in the challenge thread. One member claims it with `/writeup claim`, then submits an HTTP(S) URL with `/writeup submit url:<link>`. The completed write-up is announced before the thread is locked and archived.
+
 ### Admin commands
 
 These commands require `ADMIN_ROLE_ID` or Discord Administrator permission unless noted otherwise.

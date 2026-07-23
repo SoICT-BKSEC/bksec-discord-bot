@@ -78,6 +78,19 @@ const command: Command = {
           logger.warn(`Could not refresh dashboard after solving ${challenge.name}:`, error);
         });
 
+      await interaction.channel
+        .send({
+          content:
+            `[WRITEUP TASK] **${challenge.name}** chưa có người nhận viết write-up.\n` +
+            'Nhận task: `/writeup claim`\n' +
+            'Nộp bài: `/writeup submit url:<link>`',
+          allowedMentions: { parse: [] },
+        })
+        .catch((error) => {
+          followUpFailures.push('tạo task write-up');
+          logger.warn(`Could not create write-up task for ${challenge.name}:`, error);
+        });
+
       await interaction.editReply({
         embeds: [
           followUpFailures.length === 0

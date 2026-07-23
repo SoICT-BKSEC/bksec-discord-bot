@@ -27,7 +27,8 @@ Information commands are available to server members. Challenge-management and s
 - Must be run inside a thread under a registered CTF category.
 - Requires `ACTIVE_CTF_ROLEID` (Discord administrators are also accepted).
 - Does not require or publish a solver list.
-- Renames the thread with `[SOLVED]`, refreshes the pinned dashboard, and posts a congratulations message in `announcements`.
+- Renames the thread with `[SOLVED]`, refreshes the pinned dashboard, posts a congratulations message in `announcements`, and opens a write-up task in the challenge thread.
+- Claim the task with `/writeup claim`, then submit an HTTP(S) link with `/writeup submit url:<link>`.
 - A five-minute scheduler sends 24h/1h/start/3h-left/1h-left/end reminders and refreshes the countdown dashboard.
 - CTF registration creates and pins the dashboard in the CTF-named info channel immediately.
 - Completed challenges, completed writeups, and lifecycle reminders are posted to the dedicated `announcements` channel; discussion stays in `general`.

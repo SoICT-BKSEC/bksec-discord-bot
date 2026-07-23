@@ -62,26 +62,46 @@ const command: Command = {
 
       const subcommand = interaction.options.getSubcommand();
       if (subcommand === 'claim') {
-        if (challenge.writeupUrl) {
+        const result = await databaseService.claimChallengeWriteup(
+          challenge.id,
+          interaction.user.id
+        );
+        if (result.challenge.writeupUrl) {
           await interaction.reply({
             embeds: [errorEmbed('Writeup này đã được hoàn thành.')],
             ephemeral: true,
           });
           return;
         }
-        if (challenge.writeupOwner && challenge.writeupOwner !== interaction.user.id) {
+        if (
+          result.challenge.writeupOwner &&
+          result.challenge.writeupOwner !== interaction.user.id
+        ) {
           await interaction.reply({
-            embeds: [errorEmbed(`Writeup đã được <@${challenge.writeupOwner}> nhận.`)],
+            embeds: [errorEmbed(`Writeup đã được <@${result.challenge.writeupOwner}> nhận.`)],
             ephemeral: true,
           });
           return;
         }
-
-        await databaseService.updateChallenge(challenge.id, {
-          writeupOwner: interaction.user.id,
-        });
+        if (!result.added) {
+          await interaction.reply({
+            embeds: [successEmbed('Bạn đang là người nhận task write-up này.')],
+            ephemeral: true,
+          });
+          return;
+        }
         await interaction.reply({
-          embeds: [successEmbed('Bạn đã nhận viết writeup.')],
+          content:
+            `[WRITEUP CLAIMED] <@${interaction.user.id}> đã nhận viết write-up cho **${challenge.name}**.\n` +
+            'Nộp bài bằng `/writeup submit url:<link>`.',
+          allowedMentions: { users: [interaction.user.id] },
+        });
+        return;
+      }
+
+      if (challenge.writeupUrl) {
+        await interaction.reply({
+          embeds: [errorEmbed(`Writeup đã được nộp: ${challenge.writeupUrl}`)],
           ephemeral: true,
         });
         return;

@@ -78,6 +78,13 @@ async function run(): Promise<void> {
     assert.equal(solved.points, 500);
     assert.equal((await databaseService.getSolvedChallenges(ctfId)).length, 1);
 
+    const writeupClaim = await databaseService.claimChallengeWriteup(challenge.id, '96');
+    assert.equal(writeupClaim.added, true);
+    assert.equal(writeupClaim.challenge.writeupOwner, '96');
+    const competingWriteupClaim = await databaseService.claimChallengeWriteup(challenge.id, '95');
+    assert.equal(competingWriteupClaim.added, false);
+    assert.equal(competingWriteupClaim.challenge.writeupOwner, '96');
+
     await assert.rejects(
       databaseService.solveChallenge({
         challengeId: challenge.id,
