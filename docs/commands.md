@@ -17,6 +17,7 @@ Information commands are available to server members. Challenge-management and s
 | `/solved` | Mark the current challenge thread as solved and post a congratulations message | — |
 | `/challenge create` | Create a tracked challenge thread | `name`; `extra_category`, `points` *(optional)* |
 | `/challenge category-add` | **Admin:** register a custom category for the current CTF | `name` |
+| `/challenge list` | View all challenges in pages of 10, optionally filtered by category | `page`, `category` *(optional)* |
 | `/challenge claim` | Join the claimant list for the current challenge | — |
 | `/challenge release` | Remove yourself from the claimant list | — |
 | `/challenge status` | Set working/idea/unclaimed status | `value` |
@@ -40,6 +41,7 @@ Information commands are available to server members. Challenge-management and s
 - Thread names use standardized states: `[OPEN]`, `[ACTIVE]`, `[LEAD]`, and `[SOLVED]`.
 - `/challenge create` infers the primary category from the current channel; `extra_category` may add one different category.
 - `/challenge category-add name:<name>` creates or registers a permission-synced channel scoped to the current CTF. Custom categories are available to challenge creation and `extra_category` autocomplete only for that event.
+- The pinned dashboard truncates a long challenge list and provides `Xem challenges`. It opens a private list with `Trang trước` and `Trang sau`; `/challenge list` provides the same controls and supports `category:<name>` filtering.
 
 ### `/c-list` options
 

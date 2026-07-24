@@ -36,6 +36,17 @@ async function run(): Promise<void> {
     const categoryName = categoryAddOptions.find((option) => option.name === 'name');
     assert.ok(categoryName, 'category-add should expose a name option');
     assert.equal(categoryName.required, true, 'custom category name should be required');
+
+    const list = challengeCommand.options?.find((option) => option.name === 'list');
+    const listOptions = 'options' in (list ?? {}) ? (list?.options ?? []) : [];
+    const page = listOptions.find((option) => option.name === 'page');
+    const categoryFilter = listOptions.find((option) => option.name === 'category');
+    assert.ok(page, 'list should expose an optional page');
+    assert.equal(page.required, false, 'list page should be optional');
+    assert.equal(page.min_value, 1, 'list page should start at 1');
+    assert.ok(categoryFilter, 'list should expose an optional category filter');
+    assert.equal(categoryFilter.autocomplete, true, 'list category should use autocomplete');
+
     assert.equal(solveCommand.name, 'solved', 'solve command should be registered as /solved');
     assert.deepEqual(solveCommand.options ?? [], [], '/solved should not require any options');
 

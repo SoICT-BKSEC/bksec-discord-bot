@@ -31,6 +31,7 @@ const command: Command = {
           value:
             '`/challenge create name:<tên> [extra_category] [points]` - Tạo thread; category chính lấy từ channel hiện tại.\n' +
             '`/challenge category-add name:<tên>` - Admin tạo category riêng như hardware hoặc blockchain.\n' +
+            '`/challenge list [page] [category]` - Xem toàn bộ challenge; có nút đổi trang.\n' +
             '`/challenge claim` - Tham gia làm challenge hiện tại.\n' +
             '`/challenge release` - Rời challenge hiện tại.\n' +
             '`/challenge status value:<trạng thái>` - Cập nhật tiến độ.\n' +

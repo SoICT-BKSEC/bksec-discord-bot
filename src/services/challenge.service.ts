@@ -1,8 +1,28 @@
-import { ChannelType, EmbedBuilder, Guild, TextChannel } from 'discord.js';
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ChannelType,
+  EmbedBuilder,
+  Guild,
+  TextChannel,
+} from 'discord.js';
 import databaseService from './database.service';
 import { CHALLENGE_CATEGORIES, CTFChallenge, CTFData, ChallengeStatus } from '../types';
 import logger from '../utils/logger';
 import { config } from '../config/env';
+import { formatChallengeCategories } from '../utils/challenge-category';
+
+export const CHALLENGE_LIST_OPEN_PREFIX = 'challenge_list_open:';
+export const CHALLENGE_LIST_PAGE_PREFIX = 'challenge_list_page:';
+export const CHALLENGE_LIST_ALL_CATEGORIES = '*';
+export const CHALLENGE_PAGE_SIZE = 10;
+
+export interface ChallengeListPage {
+  embed: EmbedBuilder;
+  controls: ActionRowBuilder<ButtonBuilder>;
+  totalPages: number;
+}
 
 export const statusSymbols: Record<ChallengeStatus, string> = {
   unclaimed: '[OPEN]',
@@ -17,19 +37,91 @@ export function fitDashboardLines(lines: string[], limit = 1024): string {
   const included: string[] = [];
   for (let index = 0; index < lines.length; index++) {
     const remaining = lines.length - index - 1;
-    const suffix = remaining > 0 ? `\n… và ${remaining} challenge khác` : '';
+    const suffix = remaining > 0 ? `\n… còn ${remaining} challenge · bấm Xem challenges` : '';
     const candidate = [...included, lines[index]].join('\n') + suffix;
     if (candidate.length > limit) break;
     included.push(lines[index]);
   }
 
   const omitted = lines.length - included.length;
-  const suffix = omitted > 0 ? `\n… và ${omitted} challenge khác` : '';
+  const suffix = omitted > 0 ? `\n… còn ${omitted} challenge · bấm Xem challenges` : '';
   return `${included.join('\n')}${suffix}`.slice(0, limit);
 }
 
 class ChallengeService {
   private announcementCreations = new Map<string, Promise<TextChannel | null>>();
+
+  private challengeListLine(challenge: CTFChallenge): string {
+    const categories = formatChallengeCategories(challenge.categories);
+    const points = challenge.points ? ` · ${challenge.points} pts` : '';
+    let attribution = '';
+
+    if (challenge.status === 'solved' && challenge.solvedBy) {
+      attribution = ` · xác nhận bởi <@${challenge.solvedBy}>`;
+    } else if (challenge.claimantIds.length > 0) {
+      const visible = challenge.claimantIds.slice(0, 4).map((id) => `<@${id}>`);
+      const remaining = challenge.claimantIds.length - visible.length;
+      attribution = ` · ${visible.join(', ')}${remaining > 0 ? ` +${remaining}` : ''}`;
+    }
+
+    return `${statusSymbols[challenge.status]} <#${challenge.threadId}> · ${categories}${points}${attribution}`.slice(
+      0,
+      380
+    );
+  }
+
+  dashboardControls(ctfId: number, disabled = false): ActionRowBuilder<ButtonBuilder> {
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${CHALLENGE_LIST_OPEN_PREFIX}${ctfId}`)
+        .setLabel('Xem challenges')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(disabled)
+    );
+  }
+
+  challengeListPage(
+    ctfId: number,
+    ctfName: string,
+    challenges: CTFChallenge[],
+    page: number,
+    categoryFilter: string | null = null
+  ): ChallengeListPage | null {
+    if (challenges.length === 0) return null;
+
+    const totalPages = Math.ceil(challenges.length / CHALLENGE_PAGE_SIZE);
+    if (!Number.isInteger(page) || page < 1 || page > totalPages) return null;
+
+    const start = (page - 1) * CHALLENGE_PAGE_SIZE;
+    const lines = challenges
+      .slice(start, start + CHALLENGE_PAGE_SIZE)
+      .map((challenge) => this.challengeListLine(challenge))
+      .join('\n');
+    const categoryToken = categoryFilter ?? CHALLENGE_LIST_ALL_CATEGORIES;
+    const controls = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${CHALLENGE_LIST_PAGE_PREFIX}${ctfId}:${page - 1}:${categoryToken}`)
+        .setLabel('Trang trước')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(page === 1),
+      new ButtonBuilder()
+        .setCustomId(`${CHALLENGE_LIST_PAGE_PREFIX}${ctfId}:${page + 1}:${categoryToken}`)
+        .setLabel('Trang sau')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(page === totalPages)
+    );
+    const embed = new EmbedBuilder()
+      .setTitle(`${ctfName} — Challenges`)
+      .setColor(0xd50000)
+      .setDescription(lines)
+      .setFooter({
+        text: `Trang ${page}/${totalPages} · ${challenges.length} challenge${
+          categoryFilter ? ` · ${categoryFilter.toUpperCase()}` : ''
+        }`,
+      });
+
+    return { embed, controls, totalPages };
+  }
 
   async dashboardChannel(guild: Guild, ctf: CTFData): Promise<TextChannel | null> {
     if (ctf.channel !== '0') {
@@ -163,17 +255,18 @@ class ChallengeService {
 
     const targetChannel = await this.dashboardChannel(guild, ctf);
     if (!targetChannel) throw new Error('Dashboard channel not found');
+    const components = [this.dashboardControls(ctfId, challenges.length === 0)];
 
     const existing = await databaseService.getDashboard(ctfId);
     if (existing?.channelId === targetChannel.id) {
       const message = await targetChannel.messages.fetch(existing.messageId).catch(() => null);
       if (message) {
-        await message.edit({ embeds: [embed] });
+        await message.edit({ embeds: [embed], components });
         return;
       }
     }
 
-    const message = await targetChannel.send({ embeds: [embed] });
+    const message = await targetChannel.send({ embeds: [embed], components });
     await message.pin().catch((error) => {
       logger.warn(`Could not pin dashboard for ${ctf.name}:`, error);
     });

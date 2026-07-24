@@ -12,6 +12,11 @@ import { createEmbed, successEmbed, errorEmbed, warningEmbed } from '../utils/em
 import logger from '../utils/logger';
 import { config } from '../config/env';
 import { isAdmin } from '../utils/role.guard';
+import challengeService, {
+  CHALLENGE_LIST_ALL_CATEGORIES,
+  CHALLENGE_LIST_OPEN_PREFIX,
+  CHALLENGE_LIST_PAGE_PREFIX,
+} from '../services/challenge.service';
 
 /**
  * Buttons for showing/hiding long ongoing CTFs
@@ -147,6 +152,109 @@ export async function handleButtonInteraction(interaction: ButtonInteraction) {
   const customId = interaction.customId;
 
   try {
+    if (customId.startsWith(CHALLENGE_LIST_OPEN_PREFIX)) {
+      const ctfKey = customId.slice(CHALLENGE_LIST_OPEN_PREFIX.length);
+      if (!interaction.guild || !/^\d+$/.test(ctfKey)) {
+        await interaction.reply({
+          embeds: [errorEmbed('Dashboard challenge không hợp lệ.')],
+          ephemeral: true,
+        });
+        return;
+      }
+
+      const ctf = await databaseService.findByKey(ctfKey);
+      if (!ctf) {
+        await interaction.reply({
+          embeds: [errorEmbed('CTF không còn tồn tại trong cơ sở dữ liệu.')],
+          ephemeral: true,
+        });
+        return;
+      }
+
+      const challenges = await databaseService.getChallengesByCTF(Number(ctf.key));
+      const view = challengeService.challengeListPage(
+        Number(ctf.key),
+        ctf.data.name,
+        challenges,
+        1
+      );
+      if (!view) {
+        await interaction.reply({
+          embeds: [warningEmbed('Chưa có challenge', 'Giải này chưa có challenge để hiển thị.')],
+          ephemeral: true,
+        });
+        return;
+      }
+
+      await interaction.reply({
+        embeds: [view.embed],
+        components: [view.controls],
+        ephemeral: true,
+      });
+      return;
+    }
+
+    if (customId.startsWith(CHALLENGE_LIST_PAGE_PREFIX)) {
+      const payload = customId.slice(CHALLENGE_LIST_PAGE_PREFIX.length).split(':');
+      const [ctfKey, pageValue, categoryToken] = payload;
+      const page = Number(pageValue);
+      if (
+        !interaction.guild ||
+        payload.length !== 3 ||
+        !/^\d+$/.test(ctfKey ?? '') ||
+        !Number.isInteger(page)
+      ) {
+        await interaction.reply({
+          embeds: [errorEmbed('Nút phân trang không hợp lệ.')],
+          ephemeral: true,
+        });
+        return;
+      }
+
+      const ctf = await databaseService.findByKey(ctfKey);
+      if (!ctf) {
+        await interaction.update({
+          embeds: [errorEmbed('CTF không còn tồn tại trong cơ sở dữ liệu.')],
+          components: [],
+        });
+        return;
+      }
+
+      const categoryFilter = categoryToken === CHALLENGE_LIST_ALL_CATEGORIES ? null : categoryToken;
+      const allChallenges = await databaseService.getChallengesByCTF(Number(ctf.key));
+      const challenges = allChallenges.filter(
+        (challenge) => !categoryFilter || challenge.categories.includes(categoryFilter)
+      );
+      const view =
+        challengeService.challengeListPage(
+          Number(ctf.key),
+          ctf.data.name,
+          challenges,
+          page,
+          categoryFilter
+        ) ??
+        challengeService.challengeListPage(
+          Number(ctf.key),
+          ctf.data.name,
+          challenges,
+          1,
+          categoryFilter
+        );
+      if (!view) {
+        await interaction.update({
+          embeds: [warningEmbed('Không có challenge', 'Danh sách này hiện đang trống.')],
+          components: [],
+        });
+        return;
+      }
+
+      await interaction.update({
+        embeds: [view.embed],
+        components: [view.controls],
+      });
+      return;
+    }
+
     // Handle ongoing CTF buttons
     if (customId === 'ongo_show_all') {
       await interaction.deferUpdate();

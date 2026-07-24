@@ -55,6 +55,7 @@ Challenge-management commands must be used in a registered CTF category. Except 
 | --- | --- | --- |
 | `/challenge create <name> [extra_category] [points]` | A default or registered custom challenge channel | Create a tracked thread. Its primary category comes from the channel; one additional registered category is optional. |
 | `/challenge category-add <name>` | Any channel/thread inside a registered CTF | **Admin:** create or register a custom category for that CTF, such as `hardware`, `blockchain`, or `ai-ml`. |
+| `/challenge list [page] [category]` | Registered CTF channel or challenge thread | View all challenges in pages of 10, optionally filtered by a registered category. |
 | `/challenge claim` | Challenge thread | Add yourself to the claimant list. |
 | `/challenge release` | Challenge thread | Remove yourself from the claimant list. |
 | `/challenge status <value>` | Challenge thread | Set the state to `working`, `idea`, or `unclaimed`. |
@@ -68,6 +69,8 @@ Sending the first member message in an unsolved challenge thread silently adds t
 After `/solved`, the bot posts a write-up task in the challenge thread. One member claims it with `/writeup claim`, then submits an HTTP(S) URL with `/writeup submit url:<link>`. The completed write-up is announced before the thread is locked and archived.
 
 Custom challenge categories are scoped to one CTF. Run `/challenge category-add name:<name>` inside that CTF; the bot creates a permission-synced text channel and registers it in SQLite. Challenges created there use it as their primary category, and registered custom categories also appear in `extra_category` autocomplete.
+
+The pinned dashboard stays compact when an event has many challenges. Press `Xem challenges` to open a private paginated list, then use `Trang trước` and `Trang sau`. `/challenge list` provides the same buttons and can additionally filter by `category`.
 
 ### Admin commands
 

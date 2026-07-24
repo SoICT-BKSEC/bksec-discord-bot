@@ -13,7 +13,7 @@ import {
   Command,
 } from '../../types';
 import databaseService from '../../services/database.service';
-import challengeService from '../../services/challenge.service';
+import challengeService, { CHALLENGE_PAGE_SIZE } from '../../services/challenge.service';
 import { config } from '../../config/env';
 import { requireAdmin, requireRole } from '../../utils/role.guard';
 import { errorEmbed, successEmbed, warningEmbed } from '../../utils/embed.builder';
@@ -98,6 +98,20 @@ const command: Command = {
             .setDescription('Ví dụ: hardware, blockchain, ai-ml')
             .setRequired(true)
             .setMaxLength(32)
+        )
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('list')
+        .setDescription('Xem toàn bộ challenge theo trang')
+        .addIntegerOption((option) =>
+          option.setName('page').setDescription('Trang, mặc định 1').setMinValue(1)
+        )
+        .addStringOption((option) =>
+          option
+            .setName('category')
+            .setDescription('Chỉ hiện challenge thuộc category này')
+            .setAutocomplete(true)
         )
     )
     .addSubcommand((subcommand) =>
@@ -256,6 +270,72 @@ const command: Command = {
       }
 
       if (!(await requireRole(interaction, config.ACTIVE_CTF_ROLEID))) return;
+
+      if (subcommand === 'list') {
+        const categoryId = await interactionCategoryId(interaction);
+        const ctf = categoryId ? await databaseService.findByCategoryId(categoryId) : null;
+        if (!ctf) {
+          await interaction.reply({
+            embeds: [errorEmbed('Hãy chạy trong channel hoặc thread của CTF đã đăng ký.')],
+            ephemeral: true,
+          });
+          return;
+        }
+
+        const categoryInput = interaction.options.getString('category');
+        const categoryFilter = categoryInput ? normalizeChallengeCategoryName(categoryInput) : null;
+        const registeredCategories = await availableCategories(Number(ctf.key));
+        if (categoryInput && (!categoryFilter || !registeredCategories.includes(categoryFilter))) {
+          await interaction.reply({
+            embeds: [errorEmbed('Category chưa được đăng ký cho CTF này.')],
+            ephemeral: true,
+          });
+          return;
+        }
+
+        const challenges = (await databaseService.getChallengesByCTF(Number(ctf.key))).filter(
+          (challenge) => !categoryFilter || challenge.categories.includes(categoryFilter)
+        );
+        if (challenges.length === 0) {
+          await interaction.reply({
+            embeds: [warningEmbed('Không có challenge', 'Không tìm thấy challenge phù hợp.')],
+            ephemeral: true,
+          });
+          return;
+        }
+
+        const page = interaction.options.getInteger('page') ?? 1;
+        const totalPages = Math.ceil(challenges.length / CHALLENGE_PAGE_SIZE);
+        if (page > totalPages) {
+          await interaction.reply({
+            embeds: [errorEmbed(`Trang không hợp lệ. Danh sách có ${totalPages} trang.`)],
+            ephemeral: true,
+          });
+          return;
+        }
+
+        const view = challengeService.challengeListPage(
+          Number(ctf.key),
+          ctf.data.name,
+          challenges,
+          page,
+          categoryFilter
+        );
+        if (!view) {
+          await interaction.reply({
+            embeds: [errorEmbed('Không thể tạo trang danh sách challenge.')],
+            ephemeral: true,
+          });
+          return;
+        }
+
+        await interaction.reply({
+          embeds: [view.embed],
+          components: [view.controls],
+          ephemeral: true,
+        });
+        return;
+      }
 
       if (subcommand === 'create') {
         const channel = interaction.channel;
@@ -492,7 +572,7 @@ const command: Command = {
   async autocomplete(interaction: AutocompleteInteraction) {
     try {
       const focused = interaction.options.getFocused(true);
-      if (focused.name !== 'extra_category') {
+      if (focused.name !== 'extra_category' && focused.name !== 'category') {
         await interaction.respond([]);
         return;
       }
