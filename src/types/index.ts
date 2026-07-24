@@ -1,4 +1,5 @@
 import {
+  AutocompleteInteraction,
   ChatInputCommandInteraction,
   SlashCommandBuilder,
   SlashCommandOptionsOnlyBuilder,
@@ -45,8 +46,17 @@ export interface CTFData {
 
 export const CHALLENGE_CATEGORIES = ['web', 'pwn', 'crypto', 'rev', 'forensics', 'misc'] as const;
 
-export type ChallengeCategory = (typeof CHALLENGE_CATEGORIES)[number];
+/** A normalized Discord channel slug. Includes defaults and per-CTF custom categories. */
+export type ChallengeCategory = string;
 export type ChallengeStatus = 'unclaimed' | 'working' | 'idea' | 'solved';
+
+export interface CTFChallengeCategory {
+  ctfId: number;
+  name: ChallengeCategory;
+  channelId: string;
+  createdBy: string;
+  createdAt: number;
+}
 
 export interface CTFChallenge {
   id: number;
@@ -190,6 +200,7 @@ export interface ListCTFsResult {
 export interface Command {
   data: SlashCommandBuilder | SlashCommandOptionsOnlyBuilder;
   execute: (interaction: ChatInputCommandInteraction) => Promise<void>;
+  autocomplete?: (interaction: AutocompleteInteraction) => Promise<void>;
 }
 
 // Button interaction custom IDs

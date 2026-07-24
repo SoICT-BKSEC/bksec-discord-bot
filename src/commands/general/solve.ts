@@ -64,6 +64,7 @@ const command: Command = {
           ctf.data,
           `[SOLVED] Chúc mừng! Challenge **${challenge.name}** đã được giải.\n` +
             `Category: **${formatChallengeCategories(challenge.categories)}**\n` +
+            `Xác nhận bởi: <@${updated.solvedBy ?? interaction.user.id}>\n` +
             `Thread: <#${challenge.threadId}>`
         )
         .catch((error) => {

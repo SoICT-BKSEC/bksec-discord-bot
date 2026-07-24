@@ -1,4 +1,5 @@
 import {
+  AutocompleteInteraction,
   ChannelType,
   ChatInputCommandInteraction,
   SlashCommandBuilder,
@@ -14,14 +15,18 @@ import {
 import databaseService from '../../services/database.service';
 import challengeService from '../../services/challenge.service';
 import { config } from '../../config/env';
-import { requireRole } from '../../utils/role.guard';
+import { requireAdmin, requireRole } from '../../utils/role.guard';
 import { errorEmbed, successEmbed, warningEmbed } from '../../utils/embed.builder';
 import logger from '../../utils/logger';
 import {
   formatChallengeCategories,
-  isChallengeCategory,
+  isDefaultChallengeCategory,
   normalizeChallengeCategories,
+  normalizeChallengeCategoryName,
+  RESERVED_CHALLENGE_CHANNELS,
 } from '../../utils/challenge-category';
+
+type CategoryContextInteraction = ChatInputCommandInteraction | AutocompleteInteraction;
 
 async function threadChallenge(interaction: ChatInputCommandInteraction) {
   return interaction.channel?.isThread()
@@ -30,7 +35,7 @@ async function threadChallenge(interaction: ChatInputCommandInteraction) {
 }
 
 async function interactionCategoryId(
-  interaction: ChatInputCommandInteraction
+  interaction: CategoryContextInteraction
 ): Promise<string | null> {
   const channel = interaction.channel;
   if (!channel || !interaction.guild) return null;
@@ -42,6 +47,24 @@ async function interactionCategoryId(
   }
 
   return 'parentId' in channel ? channel.parentId : null;
+}
+
+async function availableCategories(ctfId: number): Promise<ChallengeCategory[]> {
+  const custom = await databaseService.getChallengeCategories(ctfId);
+  return [
+    ...new Set<ChallengeCategory>([...CHALLENGE_CATEGORIES, ...custom.map(({ name }) => name)]),
+  ];
+}
+
+async function channelChallengeCategory(
+  ctfId: number,
+  channel: TextChannel
+): Promise<ChallengeCategory | null> {
+  const normalizedName = normalizeChallengeCategoryName(channel.name);
+  if (normalizedName && isDefaultChallengeCategory(normalizedName)) return normalizedName;
+
+  const registered = await databaseService.findChallengeCategoryByChannel(channel.id);
+  return registered?.ctfId === ctfId ? registered.name : null;
 }
 
 const command: Command = {
@@ -59,15 +82,22 @@ const command: Command = {
           option
             .setName('extra_category')
             .setDescription('Category bổ sung; category chính được lấy từ channel hiện tại')
-            .addChoices(
-              ...CHALLENGE_CATEGORIES.map((category) => ({
-                name: category.toUpperCase(),
-                value: category,
-              }))
-            )
+            .setAutocomplete(true)
         )
         .addIntegerOption((option) =>
           option.setName('points').setDescription('Điểm').setMinValue(0)
+        )
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('category-add')
+        .setDescription('Admin: tạo hoặc đăng ký category challenge riêng cho giải này')
+        .addStringOption((option) =>
+          option
+            .setName('name')
+            .setDescription('Ví dụ: hardware, blockchain, ai-ml')
+            .setRequired(true)
+            .setMaxLength(32)
         )
     )
     .addSubcommand((subcommand) =>
@@ -98,25 +128,140 @@ const command: Command = {
 
   async execute(interaction: ChatInputCommandInteraction) {
     try {
-      if (!interaction.guild || !(await requireRole(interaction, config.ACTIVE_CTF_ROLEID))) {
+      if (!interaction.guild) return;
+
+      const subcommand = interaction.options.getSubcommand();
+      if (subcommand === 'category-add') {
+        if (!(await requireAdmin(interaction))) return;
+
+        const categoryId = await interactionCategoryId(interaction);
+        const ctf = categoryId ? await databaseService.findByCategoryId(categoryId) : null;
+        if (!ctf) {
+          await interaction.reply({
+            embeds: [errorEmbed('Hãy chạy lệnh trong channel hoặc thread của CTF đã đăng ký.')],
+            ephemeral: true,
+          });
+          return;
+        }
+        if (ctf.data.archived || ctf.data.channelsPurged) {
+          await interaction.reply({
+            embeds: [errorEmbed('Không thể thêm category vào CTF đã archive hoặc dọn channel.')],
+            ephemeral: true,
+          });
+          return;
+        }
+
+        const categoryName = normalizeChallengeCategoryName(
+          interaction.options.getString('name', true)
+        );
+        if (!categoryName) {
+          await interaction.reply({
+            embeds: [errorEmbed('Tên category phải chứa chữ hoặc số, tối đa 32 ký tự.')],
+            ephemeral: true,
+          });
+          return;
+        }
+        if (
+          isDefaultChallengeCategory(categoryName) ||
+          RESERVED_CHALLENGE_CHANNELS.some((reserved) => reserved === categoryName)
+        ) {
+          await interaction.reply({
+            embeds: [errorEmbed(`Category **${categoryName}** đã có sẵn hoặc là tên hệ thống.`)],
+            ephemeral: true,
+          });
+          return;
+        }
+
+        await interaction.deferReply({ ephemeral: true });
+        const discordCategory = await interaction.guild.channels
+          .fetch(ctf.data.cate)
+          .catch(() => null);
+        if (discordCategory?.type !== ChannelType.GuildCategory) {
+          await interaction.editReply({ embeds: [errorEmbed('Không tìm thấy Discord category.')] });
+          return;
+        }
+
+        const registered = await databaseService.findChallengeCategoryByName(
+          Number(ctf.key),
+          categoryName
+        );
+        if (registered) {
+          const registeredChannel = await interaction.guild.channels
+            .fetch(registered.channelId)
+            .catch(() => null);
+          if (
+            registeredChannel?.type === ChannelType.GuildText &&
+            registeredChannel.parentId === discordCategory.id
+          ) {
+            await registeredChannel.lockPermissions();
+            await interaction.editReply({
+              embeds: [successEmbed(`Category đã được đăng ký tại <#${registered.channelId}>.`)],
+            });
+            return;
+          }
+        }
+
+        const existingChannel = discordCategory.children.cache.find(
+          (channel) => channel.name === categoryName
+        );
+        if (existingChannel && existingChannel.type !== ChannelType.GuildText) {
+          await interaction.editReply({
+            embeds: [
+              errorEmbed(`Tên **${categoryName}** đang được dùng bởi channel không hợp lệ.`),
+            ],
+          });
+          return;
+        }
+        if (existingChannel?.id === ctf.data.channel) {
+          await interaction.editReply({
+            embeds: [errorEmbed('Không thể dùng channel thông tin làm category challenge.')],
+          });
+          return;
+        }
+
+        const created = !existingChannel;
+        const challengeChannel =
+          existingChannel?.type === ChannelType.GuildText
+            ? existingChannel
+            : await interaction.guild.channels.create({
+                name: categoryName,
+                type: ChannelType.GuildText,
+                parent: discordCategory.id,
+                reason: `Custom challenge category for ${ctf.data.name}`,
+              });
+        await challengeChannel.lockPermissions();
+
+        try {
+          await databaseService.registerChallengeCategory({
+            ctfId: Number(ctf.key),
+            name: categoryName,
+            channelId: challengeChannel.id,
+            createdBy: interaction.user.id,
+          });
+        } catch (error) {
+          if (created) {
+            await challengeChannel
+              .delete('Rolling back failed custom category registration')
+              .catch(() => undefined);
+          }
+          throw error;
+        }
+
+        await interaction.editReply({
+          embeds: [
+            successEmbed(`Đã đăng ký category **${categoryName}** tại <#${challengeChannel.id}>.`),
+          ],
+        });
         return;
       }
 
-      const subcommand = interaction.options.getSubcommand();
+      if (!(await requireRole(interaction, config.ACTIVE_CTF_ROLEID))) return;
+
       if (subcommand === 'create') {
         const channel = interaction.channel;
-        if (
-          !channel ||
-          channel.type !== ChannelType.GuildText ||
-          !channel.parentId ||
-          !isChallengeCategory(channel.name.toLowerCase())
-        ) {
+        if (!channel || channel.type !== ChannelType.GuildText || !channel.parentId) {
           await interaction.reply({
-            embeds: [
-              errorEmbed(
-                `Hãy chạy trong channel ${CHALLENGE_CATEGORIES.join(', ')} của CTF đã đăng ký.`
-              ),
-            ],
+            embeds: [errorEmbed('Hãy chạy trong một channel challenge của CTF đã đăng ký.')],
             ephemeral: true,
           });
           return;
@@ -131,10 +276,29 @@ const command: Command = {
           return;
         }
 
-        const channelCategory = channel.name.toLowerCase() as ChallengeCategory;
-        const extraCategory = interaction.options.getString(
-          'extra_category'
-        ) as ChallengeCategory | null;
+        const channelCategory = await channelChallengeCategory(Number(ctf.key), channel);
+        if (!channelCategory) {
+          await interaction.reply({
+            embeds: [
+              errorEmbed(
+                'Channel này chưa được đăng ký làm category challenge. Admin dùng `/challenge category-add` trước.'
+              ),
+            ],
+            ephemeral: true,
+          });
+          return;
+        }
+
+        const extraInput = interaction.options.getString('extra_category');
+        const extraCategory = extraInput ? normalizeChallengeCategoryName(extraInput) : null;
+        const registeredCategories = await availableCategories(Number(ctf.key));
+        if (extraInput && (!extraCategory || !registeredCategories.includes(extraCategory))) {
+          await interaction.reply({
+            embeds: [errorEmbed('Category phụ chưa được đăng ký cho CTF này.')],
+            ephemeral: true,
+          });
+          return;
+        }
         const categories = normalizeChallengeCategories(
           channelCategory,
           extraCategory ? [extraCategory] : []
@@ -322,6 +486,33 @@ const command: Command = {
       } else {
         await interaction.reply({ ...payload, ephemeral: true }).catch(() => undefined);
       }
+    }
+  },
+
+  async autocomplete(interaction: AutocompleteInteraction) {
+    try {
+      const focused = interaction.options.getFocused(true);
+      if (focused.name !== 'extra_category') {
+        await interaction.respond([]);
+        return;
+      }
+
+      const categoryId = await interactionCategoryId(interaction);
+      const ctf = categoryId ? await databaseService.findByCategoryId(categoryId) : null;
+      if (!ctf) {
+        await interaction.respond([]);
+        return;
+      }
+
+      const query = String(focused.value).trim().toLowerCase();
+      const choices = (await availableCategories(Number(ctf.key)))
+        .filter((category) => category.includes(query))
+        .slice(0, 25)
+        .map((category) => ({ name: category.toUpperCase(), value: category }));
+      await interaction.respond(choices);
+    } catch (error) {
+      logger.warn('Challenge category autocomplete failed:', error);
+      await interaction.respond([]).catch(() => undefined);
     }
   },
 };

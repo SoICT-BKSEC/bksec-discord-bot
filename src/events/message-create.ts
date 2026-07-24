@@ -1,10 +1,12 @@
 import { ChannelType, Message } from 'discord.js';
 import databaseService from '../services/database.service';
 import challengeService from '../services/challenge.service';
-import { CHALLENGE_CATEGORIES, ChallengeCategory } from '../types';
+import { ChallengeCategory } from '../types';
 import logger from '../utils/logger';
-
-const challengeCategories = new Set<ChallengeCategory>(CHALLENGE_CATEGORIES);
+import {
+  isDefaultChallengeCategory,
+  normalizeChallengeCategoryName,
+} from '../utils/challenge-category';
 
 function cleanThreadName(name: string): string {
   return name
@@ -23,11 +25,17 @@ export async function handleChallengeMessage(message: Message): Promise<void> {
       : null;
     if (!parent || parent.type !== ChannelType.GuildText || !parent.parentId) return;
 
-    const inferred = parent.name.toLowerCase() as ChallengeCategory;
-    if (!challengeCategories.has(inferred)) return;
-
     const ctf = await databaseService.findByCategoryId(parent.parentId);
     if (!ctf) return;
+
+    const normalizedName = normalizeChallengeCategoryName(parent.name);
+    let inferred: ChallengeCategory | null =
+      normalizedName && isDefaultChallengeCategory(normalizedName) ? normalizedName : null;
+    if (!inferred) {
+      const registered = await databaseService.findChallengeCategoryByChannel(parent.id);
+      if (registered?.ctfId !== Number(ctf.key)) return;
+      inferred = registered.name;
+    }
 
     let challenge = await databaseService.getChallengeByThread(thread.id);
     if (!challenge) {
@@ -53,10 +61,6 @@ export async function handleChallengeMessage(message: Message): Promise<void> {
 
     await challengeService.renameThread(message.guild, result.challenge);
     await challengeService.refreshDashboard(message.guild, ctf.key, ctf.data);
-    await thread.send({
-      content: `[PARTICIPANT ADDED] <@${message.author.id}> joined this challenge.`,
-      allowedMentions: { users: [message.author.id] },
-    });
   } catch (error) {
     logger.error('Failed to auto-claim challenge from first message:', error);
   }

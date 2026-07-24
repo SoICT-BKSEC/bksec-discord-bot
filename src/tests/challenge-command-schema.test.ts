@@ -29,6 +29,13 @@ async function run(): Promise<void> {
     );
     assert.ok(extraCategory, 'create should expose an optional extra category');
     assert.notEqual(extraCategory.required, true, 'extra category should be optional');
+    assert.equal(extraCategory.autocomplete, true, 'extra category should use autocomplete');
+
+    const categoryAdd = challengeCommand.options?.find((option) => option.name === 'category-add');
+    const categoryAddOptions = 'options' in (categoryAdd ?? {}) ? (categoryAdd?.options ?? []) : [];
+    const categoryName = categoryAddOptions.find((option) => option.name === 'name');
+    assert.ok(categoryName, 'category-add should expose a name option');
+    assert.equal(categoryName.required, true, 'custom category name should be required');
     assert.equal(solveCommand.name, 'solved', 'solve command should be registered as /solved');
     assert.deepEqual(solveCommand.options ?? [], [], '/solved should not require any options');
 

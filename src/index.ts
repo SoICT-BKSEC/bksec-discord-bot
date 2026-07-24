@@ -146,7 +146,14 @@ client.once('clientReady', async () => {
  */
 client.on('interactionCreate', async (interaction) => {
   try {
-    if (interaction.isChatInputCommand()) {
+    if (interaction.isAutocomplete()) {
+      const command = client.commands.get(interaction.commandName);
+      if (!command?.autocomplete) {
+        await interaction.respond([]);
+        return;
+      }
+      await command.autocomplete(interaction);
+    } else if (interaction.isChatInputCommand()) {
       const command = client.commands.get(interaction.commandName);
 
       if (!command) {

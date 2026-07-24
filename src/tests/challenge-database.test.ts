@@ -41,17 +41,30 @@ async function run(): Promise<void> {
       'legacy CTFtime rows should recover the actual competition end time'
     );
 
+    const customCategory = await databaseService.registerChallengeCategory({
+      ctfId,
+      name: 'hardware',
+      channelId: '11',
+      createdBy: '97',
+    });
+    assert.equal(customCategory.name, 'hardware');
+    assert.equal((await databaseService.findChallengeCategoryByChannel('11'))?.ctfId, ctfId);
+    assert.deepEqual(
+      (await databaseService.getChallengeCategories(ctfId)).map(({ name }) => name),
+      ['hardware']
+    );
+
     const challenge = await databaseService.createChallenge({
       ctfId,
       threadId: '10',
       channelId: '11',
       name: 'heap',
-      category: 'pwn',
-      categories: ['pwn', 'web', 'pwn'],
+      category: 'hardware',
+      categories: ['hardware', 'web', 'hardware'],
       points: 500,
     });
     assert.equal(challenge.status, 'unclaimed');
-    assert.deepEqual(challenge.categories, ['pwn', 'web']);
+    assert.deepEqual(challenge.categories, ['hardware', 'web']);
 
     const firstClaim = await databaseService.addChallengeClaimant(challenge.id, '98');
     assert.equal(firstClaim.added, true);
@@ -75,6 +88,7 @@ async function run(): Promise<void> {
     });
     assert.equal(solved.status, 'solved');
     assert.deepEqual(solved.solverIds, []);
+    assert.equal(solved.solvedBy, '97');
     assert.equal(solved.points, 500);
     assert.equal((await databaseService.getSolvedChallenges(ctfId)).length, 1);
 

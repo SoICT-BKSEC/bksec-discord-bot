@@ -16,6 +16,7 @@ Information commands are available to server members. Challenge-management and s
 | `/c-view` | Add/remove a per-CTF role for post-event channel access | `ctf-name` *(role, required)* |
 | `/solved` | Mark the current challenge thread as solved and post a congratulations message | — |
 | `/challenge create` | Create a tracked challenge thread | `name`; `extra_category`, `points` *(optional)* |
+| `/challenge category-add` | **Admin:** register a custom category for the current CTF | `name` |
 | `/challenge claim` | Join the claimant list for the current challenge | — |
 | `/challenge release` | Remove yourself from the claimant list | — |
 | `/challenge status` | Set working/idea/unclaimed status | `value` |
@@ -27,7 +28,7 @@ Information commands are available to server members. Challenge-management and s
 
 - Must be run inside a thread under a registered CTF category.
 - Requires `ACTIVE_CTF_ROLEID` (Discord administrators are also accepted).
-- Does not require or publish a solver list.
+- Does not require or publish a solver list; the member who runs `/solved` is displayed as the confirmer.
 - Renames the thread with `[SOLVED]`, refreshes the pinned dashboard, posts a congratulations message in `announcements`, and opens a write-up task in the challenge thread.
 - Claim the task with `/writeup claim`, then submit an HTTP(S) link with `/writeup submit url:<link>`.
 - A five-minute scheduler sends 24h/1h/start/3h-left/1h-left/end reminders and refreshes the countdown dashboard.
@@ -35,8 +36,10 @@ Information commands are available to server members. Challenge-management and s
 - Completed challenges, completed writeups, and lifecycle reminders are posted to the dedicated `announcements` channel; discussion stays in `general`.
 - The dashboard title includes current progress as `solved/total`.
 - A member's first message in a challenge thread automatically joins them to its multi-user claimant list. Manually-created threads inside a registered CTF category are registered automatically on that first message.
+- Auto-claim updates the thread name and dashboard silently; it does not post participant-added messages in the thread.
 - Thread names use standardized states: `[OPEN]`, `[ACTIVE]`, `[LEAD]`, and `[SOLVED]`.
 - `/challenge create` infers the primary category from the current channel; `extra_category` may add one different category.
+- `/challenge category-add name:<name>` creates or registers a permission-synced channel scoped to the current CTF. Custom categories are available to challenge creation and `extra_category` autocomplete only for that event.
 
 ### `/c-list` options
 

@@ -53,18 +53,21 @@ Challenge-management commands must be used in a registered CTF category. Except 
 
 | Command | Where | Purpose |
 | --- | --- | --- |
-| `/challenge create <name> [extra_category] [points]` | `web`, `crypto`, `pwn`, `rev`, `forensics`, or `misc` channel | Create a tracked thread. Its primary category comes from the channel; one additional category is optional. |
+| `/challenge create <name> [extra_category] [points]` | A default or registered custom challenge channel | Create a tracked thread. Its primary category comes from the channel; one additional registered category is optional. |
+| `/challenge category-add <name>` | Any channel/thread inside a registered CTF | **Admin:** create or register a custom category for that CTF, such as `hardware`, `blockchain`, or `ai-ml`. |
 | `/challenge claim` | Challenge thread | Add yourself to the claimant list. |
 | `/challenge release` | Challenge thread | Remove yourself from the claimant list. |
 | `/challenge status <value>` | Challenge thread | Set the state to `working`, `idea`, or `unclaimed`. |
 | `/challenge dashboard` | Registered CTF channel or challenge thread | Create or refresh the pinned progress dashboard. |
-| `/solved` | Challenge thread | Mark the challenge solved, rename the thread, refresh the dashboard, and post a congratulations message without a solver list. |
+| `/solved` | Challenge thread | Mark the challenge solved, show the caller as confirmer, rename the thread, refresh the dashboard, and post a congratulations message without a solver list. |
 | `/writeup claim` | Solved challenge thread | Claim responsibility for the challenge writeup. |
 | `/writeup submit <url>` | Solved challenge thread | Submit an HTTP(S) writeup or pull-request URL; only the claimant can submit it. |
 
-Sending the first member message in an unsolved challenge thread automatically adds that member to the claimant list. If the thread was created manually in a challenge channel, the bot registers it before adding the claimant. Multiple members may claim the same challenge.
+Sending the first member message in an unsolved challenge thread silently adds that member to the claimant list and refreshes the thread/dashboard. If the thread was created manually in a challenge channel, the bot registers it first. Multiple members may claim the same challenge.
 
 After `/solved`, the bot posts a write-up task in the challenge thread. One member claims it with `/writeup claim`, then submits an HTTP(S) URL with `/writeup submit url:<link>`. The completed write-up is announced before the thread is locked and archived.
+
+Custom challenge categories are scoped to one CTF. Run `/challenge category-add name:<name>` inside that CTF; the bot creates a permission-synced text channel and registers it in SQLite. Challenges created there use it as their primary category, and registered custom categories also appear in `extra_category` autocomplete.
 
 ### Admin commands
 

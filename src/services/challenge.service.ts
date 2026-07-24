@@ -118,24 +118,34 @@ class ChallengeService {
       (challenge) => challenge.status === 'working' || challenge.status === 'idea'
     );
 
-    const categoryLines = CHALLENGE_CATEGORIES.map((category) => {
-      const categoryChallenges = challenges.filter((challenge) =>
-        challenge.categories.includes(category)
-      );
-      if (categoryChallenges.length === 0) return null;
-      const categorySolved = categoryChallenges.filter(
-        (challenge) => challenge.status === 'solved'
-      ).length;
-      return `**${category.toUpperCase()}**: ${categorySolved}/${categoryChallenges.length}`;
-    })
+    const dashboardCategories = [
+      ...new Set([...CHALLENGE_CATEGORIES, ...challenges.flatMap(({ categories }) => categories)]),
+    ];
+    const categoryLines = dashboardCategories
+      .map((category) => {
+        const categoryChallenges = challenges.filter((challenge) =>
+          challenge.categories.includes(category)
+        );
+        if (categoryChallenges.length === 0) return null;
+        const categorySolved = categoryChallenges.filter(
+          (challenge) => challenge.status === 'solved'
+        ).length;
+        return `**${category.toUpperCase()}**: ${categorySolved}/${categoryChallenges.length}`;
+      })
       .filter((line): line is string => line !== null)
       .join('\n');
 
     const challengeLines = challenges.map((challenge) => {
-      const members = challenge.status === 'solved' ? [] : challenge.claimantIds;
-      const memberText = members.length ? ` — ${members.map((id) => `<@${id}>`).join(', ')}` : '';
+      const attribution =
+        challenge.status === 'solved'
+          ? challenge.solvedBy
+            ? ` — xác nhận bởi <@${challenge.solvedBy}>`
+            : ''
+          : challenge.claimantIds.length
+            ? ` — ${challenge.claimantIds.map((id) => `<@${id}>`).join(', ')}`
+            : '';
       const points = challenge.points ? ` (${challenge.points} pts)` : '';
-      return `${statusSymbols[challenge.status]} <#${challenge.threadId}>${memberText}${points}`;
+      return `${statusSymbols[challenge.status]} <#${challenge.threadId}>${attribution}${points}`;
     });
 
     const time = end > now ? `Kết thúc <t:${end}:R> · <t:${end}:f>` : 'Đã kết thúc';

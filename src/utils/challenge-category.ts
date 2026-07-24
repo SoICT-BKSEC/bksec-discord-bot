@@ -1,9 +1,33 @@
 import { CHALLENGE_CATEGORIES, ChallengeCategory } from '../types';
 
-const challengeCategorySet = new Set<string>(CHALLENGE_CATEGORIES);
+const DEFAULT_CATEGORY_SET = new Set<string>(CHALLENGE_CATEGORIES);
+const CATEGORY_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const MAX_CATEGORY_LENGTH = 32;
+
+export const RESERVED_CHALLENGE_CHANNELS = ['announcements', 'general'] as const;
+
+export function normalizeChallengeCategoryName(value: string): ChallengeCategory | null {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[đĐ]/g, 'd')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/-{2,}/g, '-')
+    .slice(0, MAX_CATEGORY_LENGTH)
+    .replace(/-+$/g, '');
+
+  return isChallengeCategory(normalized) ? normalized : null;
+}
 
 export function isChallengeCategory(value: string): value is ChallengeCategory {
-  return challengeCategorySet.has(value);
+  return value.length > 0 && value.length <= MAX_CATEGORY_LENGTH && CATEGORY_PATTERN.test(value);
+}
+
+export function isDefaultChallengeCategory(value: string): boolean {
+  return DEFAULT_CATEGORY_SET.has(value);
 }
 
 export function normalizeChallengeCategories(
@@ -13,8 +37,9 @@ export function normalizeChallengeCategories(
   const categories: ChallengeCategory[] = [primary];
 
   for (const category of additional) {
-    if (isChallengeCategory(category) && !categories.includes(category)) {
-      categories.push(category);
+    const normalized = normalizeChallengeCategoryName(category);
+    if (normalized && !categories.includes(normalized)) {
+      categories.push(normalized);
     }
   }
 

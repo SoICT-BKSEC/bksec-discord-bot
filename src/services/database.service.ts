@@ -9,11 +9,16 @@ import {
   TaskWithSubmissions,
   SolvedChallenge,
   CTFChallenge,
+  CTFChallengeCategory,
   ChallengeCategory,
   ChallengeStatus,
 } from '../types';
 import logger from '../utils/logger';
-import { isChallengeCategory, normalizeChallengeCategories } from '../utils/challenge-category';
+import {
+  isChallengeCategory,
+  normalizeChallengeCategories,
+  normalizeChallengeCategoryName,
+} from '../utils/challenge-category';
 
 const DB_PATH = process.env.DB_PATH ?? path.join(process.cwd(), 'ctf.db');
 
@@ -69,6 +74,14 @@ interface ChallengeRow {
   writeup_url: string | null;
   created_at: number;
   updated_at: number;
+}
+
+interface ChallengeCategoryRow {
+  ctf_id: number;
+  name: string;
+  channel_id: string;
+  created_by: string;
+  created_at: number;
 }
 
 interface DashboardRow {
@@ -256,6 +269,18 @@ class DatabaseService {
           FOREIGN KEY(ctf_id) REFERENCES ctfs(id) ON DELETE CASCADE
         );
         CREATE INDEX IF NOT EXISTS idx_ctf_challenges_ctf_id ON ctf_challenges(ctf_id);
+
+        CREATE TABLE IF NOT EXISTS ctf_challenge_categories (
+          ctf_id INTEGER NOT NULL,
+          name TEXT NOT NULL,
+          channel_id TEXT NOT NULL UNIQUE,
+          created_by TEXT NOT NULL,
+          created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+          PRIMARY KEY(ctf_id, name),
+          FOREIGN KEY(ctf_id) REFERENCES ctfs(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_ctf_challenge_categories_ctf_id
+          ON ctf_challenge_categories(ctf_id);
 
         CREATE TABLE IF NOT EXISTS ctf_dashboards (
           ctf_id INTEGER PRIMARY KEY,
@@ -818,6 +843,56 @@ class DatabaseService {
     return challenge;
   }
 
+  async registerChallengeCategory(input: {
+    ctfId: number;
+    name: ChallengeCategory;
+    channelId: string;
+    createdBy: string;
+  }): Promise<CTFChallengeCategory> {
+    const normalizedName = normalizeChallengeCategoryName(input.name);
+    if (!normalizedName || normalizedName !== input.name) {
+      throw new Error('Challenge category name must be a normalized channel slug');
+    }
+
+    this.db
+      .prepare(
+        `INSERT INTO ctf_challenge_categories (ctf_id, name, channel_id, created_by)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(ctf_id, name) DO UPDATE SET
+           channel_id = excluded.channel_id,
+           created_by = excluded.created_by`
+      )
+      .run(input.ctfId, normalizedName, input.channelId, input.createdBy);
+
+    const category = await this.findChallengeCategoryByName(input.ctfId, normalizedName);
+    if (!category) throw new Error('Registered challenge category not found');
+    return category;
+  }
+
+  async getChallengeCategories(ctfId: number): Promise<CTFChallengeCategory[]> {
+    const rows = this.db
+      .prepare('SELECT * FROM ctf_challenge_categories WHERE ctf_id = ? ORDER BY name')
+      .all(ctfId) as ChallengeCategoryRow[];
+    return rows.map((row) => this.rowToChallengeCategory(row));
+  }
+
+  async findChallengeCategoryByName(
+    ctfId: number,
+    name: string
+  ): Promise<CTFChallengeCategory | null> {
+    const row = this.db
+      .prepare('SELECT * FROM ctf_challenge_categories WHERE ctf_id = ? AND name = ?')
+      .get(ctfId, name) as ChallengeCategoryRow | undefined;
+    return row ? this.rowToChallengeCategory(row) : null;
+  }
+
+  async findChallengeCategoryByChannel(channelId: string): Promise<CTFChallengeCategory | null> {
+    const row = this.db
+      .prepare('SELECT * FROM ctf_challenge_categories WHERE channel_id = ?')
+      .get(channelId) as ChallengeCategoryRow | undefined;
+    return row ? this.rowToChallengeCategory(row) : null;
+  }
+
   async getChallengeById(id: number): Promise<CTFChallenge | null> {
     const row = this.db.prepare('SELECT * FROM ctf_challenges WHERE id = ?').get(id) as
       ChallengeRow | undefined;
@@ -1258,6 +1333,16 @@ class DatabaseService {
       writeupUrl: row.writeup_url ?? undefined,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
+    };
+  }
+
+  private rowToChallengeCategory(row: ChallengeCategoryRow): CTFChallengeCategory {
+    return {
+      ctfId: row.ctf_id,
+      name: isChallengeCategory(row.name) ? row.name : 'misc',
+      channelId: row.channel_id,
+      createdBy: row.created_by,
+      createdAt: row.created_at,
     };
   }
 
