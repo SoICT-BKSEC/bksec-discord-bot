@@ -185,13 +185,12 @@ const command: Command = {
       await databaseService.updateChallenge(challenge.id, { writeupUrl: url });
 
       try {
-        await challengeService.announce(
+        await challengeService.announceWriteup(
           interaction.guild,
           ctf.data,
-          `[WRITEUP COMPLETED] **${challenge.name}**\n` +
-            `Written by: <@${interaction.user.id}>\n` +
-            `Document: ${url}\n` +
-            `Thread: <#${challenge.threadId}>`
+          challenge,
+          interaction.user.id,
+          url
         );
       } catch (error) {
         logger.warn(`Writeup saved but announcement failed for ${challenge.name}:`, error);

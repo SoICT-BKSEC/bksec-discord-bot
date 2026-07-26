@@ -43,7 +43,7 @@ const command: Command = {
           value:
             '`/writeup claim` - Nhận viết write-up trong thread đã solved.\n' +
             '`/writeup release` - Trả lại task nếu claim nhầm; admin có thể gỡ giúp.\n' +
-            '`/writeup submit url:<https://...>` - Nộp URL write-up; chỉ người đã claim mới nộp được.',
+            '`/writeup submit url:<https://...>` - Nộp bài và đăng thông tin tại #writeups.',
         },
         {
           name: 'Đăng ký giải - Admin',

@@ -24,6 +24,25 @@ export interface ChallengeListPage {
   totalPages: number;
 }
 
+export function buildWriteupAnnouncementEmbed(
+  ctfName: string,
+  challenge: CTFChallenge,
+  writerId: string,
+  url: string
+): EmbedBuilder {
+  return new EmbedBuilder()
+    .setTitle(`${ctfName} — Write-up hoàn thành`.slice(0, 256))
+    .setColor(0xd50000)
+    .setDescription(`URL: ${url}`)
+    .addFields(
+      { name: 'Challenge', value: challenge.name },
+      { name: 'Category', value: formatChallengeCategories(challenge.categories), inline: true },
+      { name: 'Người viết', value: `<@${writerId}>`, inline: true },
+      { name: 'Thread', value: `<#${challenge.threadId}>` }
+    )
+    .setTimestamp();
+}
+
 export const statusSymbols: Record<ChallengeStatus, string> = {
   unclaimed: '[OPEN]',
   working: '[ACTIVE]',
@@ -156,7 +175,7 @@ class ChallengeService {
   private async readOnlyChannel(
     guild: Guild,
     ctf: CTFData,
-    channelName: 'announcements' | 'solved'
+    channelName: 'announcements' | 'solved' | 'writeups'
   ): Promise<TextChannel | null> {
     const category = await guild.channels.fetch(ctf.cate).catch(() => null);
     if (category?.type !== ChannelType.GuildCategory) return null;
@@ -203,6 +222,10 @@ class ChallengeService {
 
   async solvedChannel(guild: Guild, ctf: CTFData): Promise<TextChannel | null> {
     return this.readOnlyChannel(guild, ctf, 'solved');
+  }
+
+  async writeupChannel(guild: Guild, ctf: CTFData): Promise<TextChannel | null> {
+    return this.readOnlyChannel(guild, ctf, 'writeups');
   }
 
   threadName(challenge: CTFChallenge): string {
@@ -271,6 +294,9 @@ class ChallengeService {
     await this.solvedChannel(guild, ctf).catch((error) => {
       logger.warn(`Could not ensure solved channel for ${ctf.name}:`, error);
     });
+    await this.writeupChannel(guild, ctf).catch((error) => {
+      logger.warn(`Could not ensure writeups channel for ${ctf.name}:`, error);
+    });
     const components = [this.dashboardControls(ctfId, challenges.length === 0)];
 
     const existing = await databaseService.getDashboard(ctfId);
@@ -312,6 +338,21 @@ class ChallengeService {
     const channel = await this.solvedChannel(guild, ctf);
     if (!channel) throw new Error(`No solved channel for ${ctf.name}`);
     await channel.send({ content, allowedMentions: { parse: ['users'] } });
+  }
+
+  async announceWriteup(
+    guild: Guild,
+    ctf: CTFData,
+    challenge: CTFChallenge,
+    writerId: string,
+    url: string
+  ): Promise<void> {
+    const channel = await this.writeupChannel(guild, ctf);
+    if (!channel) throw new Error(`No writeups channel for ${ctf.name}`);
+    await channel.send({
+      embeds: [buildWriteupAnnouncementEmbed(ctf.name, challenge, writerId, url)],
+      allowedMentions: { users: [writerId] },
+    });
   }
 }
 

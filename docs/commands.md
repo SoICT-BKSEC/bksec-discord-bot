@@ -24,7 +24,7 @@ Information commands are available to server members. Challenge-management and s
 | `/challenge dashboard` | Create or refresh the pinned CTF dashboard | — |
 | `/writeup claim` | Claim the writeup for a solved challenge | — |
 | `/writeup release` | Return a mistakenly claimed writeup task; owner or admin only | — |
-| `/writeup submit` | Submit the writeup or pull-request URL | `url` |
+| `/writeup submit` | Submit the writeup URL and publish its details in `writeups` | `url` |
 
 ### `/solved` behavior
 
@@ -35,7 +35,7 @@ Information commands are available to server members. Challenge-management and s
 - Claim the task with `/writeup claim`; use `/writeup release` after a mistaken claim; then submit an HTTP(S) link with `/writeup submit url:<link>`.
 - A five-minute scheduler sends 24h/1h/start/3h-left/1h-left/end reminders and refreshes the countdown dashboard.
 - CTF registration creates and pins the dashboard in the CTF-named info channel immediately.
-- Completed challenges are posted to `solved`. Completed writeups and lifecycle reminders remain in `announcements`; discussion stays in `general`.
+- Completed challenges are posted to `solved`. Submitted write-ups are posted to `writeups` with challenge, category, author, URL, and thread details. Lifecycle reminders remain in `announcements`; discussion stays in `general`.
 - The dashboard title includes current progress as `solved/total`.
 - A member's first message in a challenge thread automatically joins them to its multi-user claimant list. Manually-created threads inside a registered CTF category are registered automatically on that first message.
 - Auto-claim updates the thread name and dashboard silently; it does not post participant-added messages in the thread.

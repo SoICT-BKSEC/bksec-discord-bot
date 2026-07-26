@@ -18,6 +18,7 @@ async function run(): Promise<void> {
   try {
     const {
       default: challengeService,
+      buildWriteupAnnouncementEmbed,
       CHALLENGE_LIST_OPEN_PREFIX,
       CHALLENGE_LIST_PAGE_PREFIX,
     } = await import('../services/challenge.service');
@@ -73,6 +74,21 @@ async function run(): Promise<void> {
     );
     assert.equal(challengeService.challengeListPage(7, 'Test CTF', challenges, 4), null);
     assert.equal(challengeService.challengeListPage(7, 'Test CTF', [], 1), null);
+
+    const writeupEmbed = buildWriteupAnnouncementEmbed(
+      'Test CTF',
+      { ...challenges[0], categories: ['web', 'misc'] },
+      '100000000000000009',
+      'https://example.com/writeups/challenge-1'
+    ).toJSON();
+    const writeupFields = Object.fromEntries(
+      (writeupEmbed.fields ?? []).map((field) => [field.name, field.value])
+    );
+    assert.equal(writeupFields.Challenge, 'Challenge 1');
+    assert.equal(writeupFields.Category, 'WEB / MISC');
+    assert.equal(writeupFields['Người viết'], '<@100000000000000009>');
+    assert.equal(writeupFields.Thread, `<#${challenges[0].threadId}>`);
+    assert.match(writeupEmbed.description ?? '', /https:\/\/example\.com\/writeups\/challenge-1/);
 
     console.log('challenge list view tests passed');
   } finally {

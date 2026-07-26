@@ -4,7 +4,12 @@ const DEFAULT_CATEGORY_SET = new Set<string>(CHALLENGE_CATEGORIES);
 const CATEGORY_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const MAX_CATEGORY_LENGTH = 32;
 
-export const RESERVED_CHALLENGE_CHANNELS = ['announcements', 'solved', 'general'] as const;
+export const RESERVED_CHALLENGE_CHANNELS = [
+  'announcements',
+  'solved',
+  'writeups',
+  'general',
+] as const;
 
 export function normalizeChallengeCategoryName(value: string): ChallengeCategory | null {
   const normalized = value

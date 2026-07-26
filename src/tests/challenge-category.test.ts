@@ -17,5 +17,6 @@ assert.deepEqual(normalizeChallengeCategories('hardware', ['web', 'hardware', 'A
   'ai-ml',
 ]);
 assert.equal(RESERVED_CHALLENGE_CHANNELS.includes('solved'), true);
+assert.equal(RESERVED_CHALLENGE_CHANNELS.includes('writeups'), true);
 
 console.log('challenge category tests passed');

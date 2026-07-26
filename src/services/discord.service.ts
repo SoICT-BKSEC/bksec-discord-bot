@@ -14,7 +14,7 @@ import databaseService from './database.service';
 import { isCtfLive } from '../utils/ctf-visibility';
 import { CTFData } from '../types';
 
-const READ_ONLY_CTF_CHANNELS = new Set(['announcements', 'solved']);
+const READ_ONLY_CTF_CHANNELS = new Set(['announcements', 'solved', 'writeups']);
 
 /**
  * Discord helper service for managing channels, roles, and permissions
@@ -122,6 +122,7 @@ class DiscordService {
       const channelNames = [
         'announcements',
         'solved',
+        'writeups',
         'general',
         'web',
         'crypto',
@@ -210,6 +211,12 @@ class DiscordService {
 
       await guild.channels.create({
         name: 'solved',
+        type: ChannelType.GuildText,
+        parent: category.id,
+      });
+
+      await guild.channels.create({
+        name: 'writeups',
         type: ChannelType.GuildText,
         parent: category.id,
       });
