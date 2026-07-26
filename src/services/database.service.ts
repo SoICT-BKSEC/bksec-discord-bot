@@ -991,6 +991,42 @@ class DatabaseService {
     return transaction();
   }
 
+  async releaseChallengeWriteup(
+    id: number,
+    userId: string,
+    allowOverride = false
+  ): Promise<{ challenge: CTFChallenge; released: boolean }> {
+    const transaction = this.db.transaction(() => {
+      const row = this.db.prepare('SELECT * FROM ctf_challenges WHERE id = ?').get(id) as
+        ChallengeRow | undefined;
+      if (!row) throw new Error('Challenge not found');
+      if (row.status !== 'solved')
+        throw new Error('Challenge must be solved before writeup release');
+
+      if (row.writeup_url || !row.writeup_owner) {
+        return { challenge: this.rowToChallenge(row), released: false };
+      }
+      if (row.writeup_owner !== userId && !allowOverride) {
+        return { challenge: this.rowToChallenge(row), released: false };
+      }
+
+      this.db
+        .prepare(
+          `UPDATE ctf_challenges
+           SET writeup_owner = NULL, updated_at = strftime('%s','now')
+           WHERE id = ?`
+        )
+        .run(id);
+
+      const updated = this.db.prepare('SELECT * FROM ctf_challenges WHERE id = ?').get(id) as
+        ChallengeRow | undefined;
+      if (!updated) throw new Error('Updated challenge not found');
+      return { challenge: this.rowToChallenge(updated), released: true };
+    });
+
+    return transaction();
+  }
+
   async addChallengeClaimant(
     id: number,
     userId: string

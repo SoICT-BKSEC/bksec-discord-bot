@@ -414,6 +414,14 @@ const command: Command = {
           throw error;
         }
 
+        const creatorAdded = await thread.members
+          .add(interaction.user.id)
+          .then(() => true)
+          .catch((error) => {
+            logger.warn(`Could not add ${interaction.user.id} to challenge ${name}:`, error);
+            return false;
+          });
+
         const introSent = await thread
           .send({
             content:
@@ -438,11 +446,12 @@ const command: Command = {
 
         await interaction.editReply({
           embeds: [
-            dashboardUpdated && introSent
-              ? successEmbed(`Đã tạo <#${thread.id}>.`)
+            dashboardUpdated && introSent && creatorAdded
+              ? successEmbed(`Đã tạo <#${thread.id}> và thêm bạn vào thread.`)
               : warningEmbed(
                   'Challenge đã được tạo',
                   `<#${thread.id}> đã tồn tại nhưng chưa hoàn tất: ${[
+                    !creatorAdded ? 'thêm bạn vào thread' : null,
                     !introSent ? 'tin nhắn mở đầu' : null,
                     !dashboardUpdated ? 'dashboard' : null,
                   ]

@@ -51,6 +51,9 @@ async function run(): Promise<void> {
     assert.deepEqual(solveCommand.options ?? [], [], '/solved should not require any options');
 
     const submit = writeupCommand.options?.find((option) => option.name === 'submit');
+    const release = writeupCommand.options?.find((option) => option.name === 'release');
+    assert.ok(release, '/writeup should expose a release subcommand');
+    assert.deepEqual(release.options ?? [], [], '/writeup release should not require options');
     const submitOptions = 'options' in (submit ?? {}) ? (submit?.options ?? []) : [];
     const url = submitOptions.find((option) => option.name === 'url');
     assert.ok(url, '/writeup submit should expose a URL option');

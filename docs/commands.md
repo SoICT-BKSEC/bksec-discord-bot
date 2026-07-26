@@ -23,6 +23,7 @@ Information commands are available to server members. Challenge-management and s
 | `/challenge status` | Set working/idea/unclaimed status | `value` |
 | `/challenge dashboard` | Create or refresh the pinned CTF dashboard | — |
 | `/writeup claim` | Claim the writeup for a solved challenge | — |
+| `/writeup release` | Return a mistakenly claimed writeup task; owner or admin only | — |
 | `/writeup submit` | Submit the writeup or pull-request URL | `url` |
 
 ### `/solved` behavior
@@ -30,16 +31,17 @@ Information commands are available to server members. Challenge-management and s
 - Must be run inside a thread under a registered CTF category.
 - Requires `ACTIVE_CTF_ROLEID` (Discord administrators are also accepted).
 - Does not require or publish a solver list; the member who runs `/solved` is displayed as the confirmer.
-- Renames the thread with `[SOLVED]`, refreshes the pinned dashboard, posts a congratulations message in `announcements`, and opens a write-up task in the challenge thread.
-- Claim the task with `/writeup claim`, then submit an HTTP(S) link with `/writeup submit url:<link>`.
+- Renames the thread with `[SOLVED]`, refreshes the pinned dashboard, posts a congratulations message in the read-only `solved` channel, and opens a write-up task in the challenge thread.
+- Claim the task with `/writeup claim`; use `/writeup release` after a mistaken claim; then submit an HTTP(S) link with `/writeup submit url:<link>`.
 - A five-minute scheduler sends 24h/1h/start/3h-left/1h-left/end reminders and refreshes the countdown dashboard.
 - CTF registration creates and pins the dashboard in the CTF-named info channel immediately.
-- Completed challenges, completed writeups, and lifecycle reminders are posted to the dedicated `announcements` channel; discussion stays in `general`.
+- Completed challenges are posted to `solved`. Completed writeups and lifecycle reminders remain in `announcements`; discussion stays in `general`.
 - The dashboard title includes current progress as `solved/total`.
 - A member's first message in a challenge thread automatically joins them to its multi-user claimant list. Manually-created threads inside a registered CTF category are registered automatically on that first message.
 - Auto-claim updates the thread name and dashboard silently; it does not post participant-added messages in the thread.
 - Thread names use standardized states: `[OPEN]`, `[ACTIVE]`, `[LEAD]`, and `[SOLVED]`.
 - `/challenge create` infers the primary category from the current channel; `extra_category` may add one different category.
+- The member running `/challenge create` is added to the new thread automatically, without claiming it or changing `[OPEN]` status.
 - `/challenge category-add name:<name>` creates or registers a permission-synced channel scoped to the current CTF. Custom categories are available to challenge creation and `extra_category` autocomplete only for that event.
 - The pinned dashboard truncates a long challenge list and provides `Xem challenges`. It opens a private list with `Trang trước` and `Trang sau`; `/challenge list` provides the same controls and supports `category:<name>` filtering.
 

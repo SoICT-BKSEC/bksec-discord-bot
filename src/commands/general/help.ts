@@ -29,7 +29,7 @@ const command: Command = {
         {
           name: 'Challenge',
           value:
-            '`/challenge create name:<tên> [extra_category] [points]` - Tạo thread; category chính lấy từ channel hiện tại.\n' +
+            '`/challenge create name:<tên> [extra_category] [points]` - Tạo và tự tham gia thread; chưa tự claim.\n' +
             '`/challenge category-add name:<tên>` - Admin tạo category riêng như hardware hoặc blockchain.\n' +
             '`/challenge list [page] [category]` - Xem toàn bộ challenge; có nút đổi trang.\n' +
             '`/challenge claim` - Tham gia làm challenge hiện tại.\n' +
@@ -42,6 +42,7 @@ const command: Command = {
           name: 'Write-up',
           value:
             '`/writeup claim` - Nhận viết write-up trong thread đã solved.\n' +
+            '`/writeup release` - Trả lại task nếu claim nhầm; admin có thể gỡ giúp.\n' +
             '`/writeup submit url:<https://...>` - Nộp URL write-up; chỉ người đã claim mới nộp được.',
         },
         {

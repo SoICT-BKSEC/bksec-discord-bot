@@ -62,11 +62,16 @@ Challenge-management commands must be used in a registered CTF category. Except 
 | `/challenge dashboard` | Registered CTF channel or challenge thread | Create or refresh the pinned progress dashboard. |
 | `/solved` | Challenge thread | Mark the challenge solved, show the caller as confirmer, rename the thread, refresh the dashboard, and post a congratulations message without a solver list. |
 | `/writeup claim` | Solved challenge thread | Claim responsibility for the challenge writeup. |
+| `/writeup release` | Solved challenge thread | Return a mistakenly claimed writeup task. The current owner or an administrator may release it. |
 | `/writeup submit <url>` | Solved challenge thread | Submit an HTTP(S) writeup or pull-request URL; only the claimant can submit it. |
 
 Sending the first member message in an unsolved challenge thread silently adds that member to the claimant list and refreshes the thread/dashboard. If the thread was created manually in a challenge channel, the bot registers it first. Multiple members may claim the same challenge.
 
-After `/solved`, the bot posts a write-up task in the challenge thread. One member claims it with `/writeup claim`, then submits an HTTP(S) URL with `/writeup submit url:<link>`. The completed write-up is announced before the thread is locked and archived.
+The member who runs `/challenge create` is added to the new Discord thread immediately. This only joins the thread and does not claim the challenge or change its `[OPEN]` status.
+
+After `/solved`, the bot posts a write-up task in the challenge thread. One member claims it with `/writeup claim`, may return a mistaken claim with `/writeup release`, then submits an HTTP(S) URL with `/writeup submit url:<link>`. The completed write-up is announced before the thread is locked and archived.
+
+Challenge solve messages are sent to the read-only `solved` channel. Lifecycle reminders, schedule updates, and completed writeups remain in `announcements`. New CTF registrations create both channels; existing events receive `solved` automatically when their dashboard refreshes or their next challenge is solved.
 
 Custom challenge categories are scoped to one CTF. Run `/challenge category-add name:<name>` inside that CTF; the bot creates a permission-synced text channel and registers it in SQLite. Challenges created there use it as their primary category, and registered custom categories also appear in `extra_category` autocomplete.
 
@@ -102,7 +107,7 @@ The older training-task workflow is implemented but not currently registered, so
 2. **Competition ended:** the scheduler removes shared credentials, keeps `@everyone` denied, and grants the per-CTF role plus `VIEW_ALL_CTF_ROLEID`. It also posts the end reminder and refreshes the dashboard.
 3. **Archive time reached:** CTFtime events are archived seven days after the competition ends. Manual events are archived `hide_after` days after their supplied `end_at` time.
 
-The scheduler runs every five minutes. Reminder delivery is persisted in SQLite, so restarting the bot does not duplicate already-sent 24-hour, 1-hour, start, 3-hours-left, 1-hour-left, or end notifications. Notifications and completed writeups are sent to the read-only `announcements` channel.
+The scheduler runs every five minutes. Reminder delivery is persisted in SQLite, so restarting the bot does not duplicate already-sent 24-hour, 1-hour, start, 3-hours-left, 1-hour-left, or end notifications. Lifecycle notifications and completed writeups are sent to read-only `announcements`; challenge solves are sent to read-only `solved`.
 
 ## Runtime requirements
 
@@ -195,7 +200,7 @@ src/
 │   └── ready.ts              # Startup behavior and ready-state handling
 ├── services/
 │   ├── ctftime.service.ts    # CTFtime API access, event parsing, search, pagination embeds
-│   ├── challenge.service.ts  # Dashboards, announcements, and thread naming
+│   ├── challenge.service.ts  # Dashboards, system channels, and thread naming
 │   ├── ctf-scheduler.service.ts # Lifecycle reminders and permission sweeps
 │   ├── database.service.ts   # SQLite schema and persistent state
 │   └── discord.service.ts    # Discord roles, channels, categories, events, permissions

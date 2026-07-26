@@ -49,7 +49,7 @@ export function fitDashboardLines(lines: string[], limit = 1024): string {
 }
 
 class ChallengeService {
-  private announcementCreations = new Map<string, Promise<TextChannel | null>>();
+  private readOnlyChannelCreations = new Map<string, Promise<TextChannel | null>>();
 
   private challengeListLine(challenge: CTFChallenge): string {
     const categories = formatChallengeCategories(challenge.categories);
@@ -131,7 +131,7 @@ class ChallengeService {
     return this.notificationChannel(guild, ctf);
   }
 
-  private async configureAnnouncementChannel(
+  private async configureReadOnlyChannel(
     guild: Guild,
     channel: TextChannel,
     ctf: CTFData
@@ -153,43 +153,56 @@ class ChallengeService {
     }
   }
 
-  async notificationChannel(guild: Guild, ctf: CTFData): Promise<TextChannel | null> {
+  private async readOnlyChannel(
+    guild: Guild,
+    ctf: CTFData,
+    channelName: 'announcements' | 'solved'
+  ): Promise<TextChannel | null> {
     const category = await guild.channels.fetch(ctf.cate).catch(() => null);
     if (category?.type !== ChannelType.GuildCategory) return null;
 
-    const existingAnnouncements = category.children.cache.find(
-      (channel) => channel.type === ChannelType.GuildText && channel.name === 'announcements'
+    const existingChannel = category.children.cache.find(
+      (channel) => channel.type === ChannelType.GuildText && channel.name === channelName
     );
-    let announcements: TextChannel | null =
-      existingAnnouncements?.type === ChannelType.GuildText ? existingAnnouncements : null;
+    let targetChannel: TextChannel | null =
+      existingChannel?.type === ChannelType.GuildText ? existingChannel : null;
 
-    if (!announcements) {
-      let pending = this.announcementCreations.get(category.id);
+    if (!targetChannel) {
+      const creationKey = `${category.id}:${channelName}`;
+      let pending = this.readOnlyChannelCreations.get(creationKey);
       if (!pending) {
         pending = guild.channels
           .create({
-            name: 'announcements',
+            name: channelName,
             type: ChannelType.GuildText,
             parent: category.id,
-            reason: `CTF notifications for ${ctf.name}`,
+            reason: `CTF ${channelName} for ${ctf.name}`,
           })
           .then((channel) => channel)
           .catch((error) => {
-            logger.warn(`Could not create announcements channel for ${ctf.name}:`, error);
+            logger.warn(`Could not create ${channelName} channel for ${ctf.name}:`, error);
             return null;
           });
-        this.announcementCreations.set(category.id, pending);
+        this.readOnlyChannelCreations.set(creationKey, pending);
       }
 
-      announcements = await pending;
-      this.announcementCreations.delete(category.id);
+      targetChannel = await pending;
+      this.readOnlyChannelCreations.delete(creationKey);
     }
 
-    if (!announcements || announcements.type !== ChannelType.GuildText) return null;
-    await this.configureAnnouncementChannel(guild, announcements, ctf).catch((error) => {
-      logger.warn(`Could not make announcements read-only for ${ctf.name}:`, error);
+    if (!targetChannel || targetChannel.type !== ChannelType.GuildText) return null;
+    await this.configureReadOnlyChannel(guild, targetChannel, ctf).catch((error) => {
+      logger.warn(`Could not make ${channelName} read-only for ${ctf.name}:`, error);
     });
-    return announcements;
+    return targetChannel;
+  }
+
+  async notificationChannel(guild: Guild, ctf: CTFData): Promise<TextChannel | null> {
+    return this.readOnlyChannel(guild, ctf, 'announcements');
+  }
+
+  async solvedChannel(guild: Guild, ctf: CTFData): Promise<TextChannel | null> {
+    return this.readOnlyChannel(guild, ctf, 'solved');
   }
 
   threadName(challenge: CTFChallenge): string {
@@ -255,6 +268,9 @@ class ChallengeService {
 
     const targetChannel = await this.dashboardChannel(guild, ctf);
     if (!targetChannel) throw new Error('Dashboard channel not found');
+    await this.solvedChannel(guild, ctf).catch((error) => {
+      logger.warn(`Could not ensure solved channel for ${ctf.name}:`, error);
+    });
     const components = [this.dashboardControls(ctfId, challenges.length === 0)];
 
     const existing = await databaseService.getDashboard(ctfId);
@@ -289,6 +305,12 @@ class ChallengeService {
   async announce(guild: Guild, ctf: CTFData, content: string): Promise<void> {
     const channel = await this.notificationChannel(guild, ctf);
     if (!channel) throw new Error(`No announcement channel for ${ctf.name}`);
+    await channel.send({ content, allowedMentions: { parse: ['users'] } });
+  }
+
+  async announceSolved(guild: Guild, ctf: CTFData, content: string): Promise<void> {
+    const channel = await this.solvedChannel(guild, ctf);
+    if (!channel) throw new Error(`No solved channel for ${ctf.name}`);
     await channel.send({ content, allowedMentions: { parse: ['users'] } });
   }
 }

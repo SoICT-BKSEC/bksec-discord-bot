@@ -14,6 +14,8 @@ import databaseService from './database.service';
 import { isCtfLive } from '../utils/ctf-visibility';
 import { CTFData } from '../types';
 
+const READ_ONLY_CTF_CHANNELS = new Set(['announcements', 'solved']);
+
 /**
  * Discord helper service for managing channels, roles, and permissions
  */
@@ -24,7 +26,7 @@ class DiscordService {
   ): Promise<void> {
     for (const [, channel] of category.children.cache) {
       await channel.lockPermissions();
-      if (channel.type !== ChannelType.GuildText || channel.name !== 'announcements') {
+      if (channel.type !== ChannelType.GuildText || !READ_ONLY_CTF_CHANNELS.has(channel.name)) {
         continue;
       }
 
@@ -119,6 +121,7 @@ class DiscordService {
       // Create other challenge channels
       const channelNames = [
         'announcements',
+        'solved',
         'general',
         'web',
         'crypto',
@@ -201,6 +204,12 @@ class DiscordService {
 
       await guild.channels.create({
         name: 'announcements',
+        type: ChannelType.GuildText,
+        parent: category.id,
+      });
+
+      await guild.channels.create({
+        name: 'solved',
         type: ChannelType.GuildText,
         parent: category.id,
       });

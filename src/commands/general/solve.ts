@@ -59,7 +59,7 @@ const command: Command = {
       });
 
       await challengeService
-        .announce(
+        .announceSolved(
           interaction.guild,
           ctf.data,
           `[SOLVED] Chúc mừng! Challenge **${challenge.name}** đã được giải.\n` +

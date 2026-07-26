@@ -98,6 +98,17 @@ async function run(): Promise<void> {
     const competingWriteupClaim = await databaseService.claimChallengeWriteup(challenge.id, '95');
     assert.equal(competingWriteupClaim.added, false);
     assert.equal(competingWriteupClaim.challenge.writeupOwner, '96');
+    const unauthorizedRelease = await databaseService.releaseChallengeWriteup(challenge.id, '95');
+    assert.equal(unauthorizedRelease.released, false);
+    assert.equal(unauthorizedRelease.challenge.writeupOwner, '96');
+    const writeupRelease = await databaseService.releaseChallengeWriteup(challenge.id, '96');
+    assert.equal(writeupRelease.released, true);
+    assert.equal(writeupRelease.challenge.writeupOwner, undefined);
+    const secondWriteupClaim = await databaseService.claimChallengeWriteup(challenge.id, '95');
+    assert.equal(secondWriteupClaim.added, true);
+    const adminRelease = await databaseService.releaseChallengeWriteup(challenge.id, '97', true);
+    assert.equal(adminRelease.released, true);
+    assert.equal(adminRelease.challenge.writeupOwner, undefined);
 
     await assert.rejects(
       databaseService.solveChallenge({

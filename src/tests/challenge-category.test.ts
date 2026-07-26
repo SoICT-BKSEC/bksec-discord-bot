@@ -3,6 +3,7 @@ import {
   isDefaultChallengeCategory,
   normalizeChallengeCategories,
   normalizeChallengeCategoryName,
+  RESERVED_CHALLENGE_CHANNELS,
 } from '../utils/challenge-category';
 
 assert.equal(normalizeChallengeCategoryName(' AI / ML '), 'ai-ml');
@@ -15,5 +16,6 @@ assert.deepEqual(normalizeChallengeCategories('hardware', ['web', 'hardware', 'A
   'web',
   'ai-ml',
 ]);
+assert.equal(RESERVED_CHALLENGE_CHANNELS.includes('solved'), true);
 
 console.log('challenge category tests passed');

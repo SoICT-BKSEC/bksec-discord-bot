@@ -4,6 +4,7 @@ import databaseService from '../../services/database.service';
 import { errorEmbed, successEmbed, warningEmbed } from '../../utils/embed.builder';
 import challengeService from '../../services/challenge.service';
 import logger from '../../utils/logger';
+import { isAdmin } from '../../utils/role.guard';
 
 function validWriteupUrl(value: string): boolean {
   try {
@@ -19,6 +20,9 @@ const command: Command = {
     .setName('writeup')
     .setDescription('Quản lý writeup challenge')
     .addSubcommand((subcommand) => subcommand.setName('claim').setDescription('Nhận viết writeup'))
+    .addSubcommand((subcommand) =>
+      subcommand.setName('release').setDescription('Trả lại task writeup đã claim nhầm')
+    )
     .addSubcommand((subcommand) =>
       subcommand
         .setName('submit')
@@ -94,6 +98,62 @@ const command: Command = {
           content:
             `[WRITEUP CLAIMED] <@${interaction.user.id}> đã nhận viết write-up cho **${challenge.name}**.\n` +
             'Nộp bài bằng `/writeup submit url:<link>`.',
+          allowedMentions: { users: [interaction.user.id] },
+        });
+        return;
+      }
+
+      if (subcommand === 'release') {
+        if (challenge.writeupUrl) {
+          await interaction.reply({
+            embeds: [errorEmbed(`Writeup đã được nộp: ${challenge.writeupUrl}`)],
+            ephemeral: true,
+          });
+          return;
+        }
+        if (!challenge.writeupOwner) {
+          await interaction.reply({
+            embeds: [warningEmbed('Task đang trống', 'Chưa có ai claim write-up này.')],
+            ephemeral: true,
+          });
+          return;
+        }
+
+        const adminOverride =
+          challenge.writeupOwner !== interaction.user.id && (await isAdmin(interaction));
+        if (challenge.writeupOwner !== interaction.user.id && !adminOverride) {
+          await interaction.reply({
+            embeds: [
+              errorEmbed(`Chỉ <@${challenge.writeupOwner}> hoặc admin mới có thể trả lại task.`),
+            ],
+            ephemeral: true,
+          });
+          return;
+        }
+
+        const result = await databaseService.releaseChallengeWriteup(
+          challenge.id,
+          interaction.user.id,
+          adminOverride
+        );
+        if (!result.released) {
+          const message = result.challenge.writeupUrl
+            ? `Writeup đã được nộp: ${result.challenge.writeupUrl}`
+            : result.challenge.writeupOwner
+              ? `Task hiện do <@${result.challenge.writeupOwner}> phụ trách.`
+              : 'Task đã được trả lại trước đó.';
+          await interaction.reply({
+            embeds: [warningEmbed('Không có thay đổi', message)],
+            ephemeral: true,
+          });
+          return;
+        }
+
+        await interaction.reply({
+          content:
+            `[WRITEUP AVAILABLE] Task write-up cho **${challenge.name}** đã được mở lại.\n` +
+            `Thao tác bởi: <@${interaction.user.id}>\n` +
+            'Nhận task bằng `/writeup claim`.',
           allowedMentions: { users: [interaction.user.id] },
         });
         return;

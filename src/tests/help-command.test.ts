@@ -27,7 +27,9 @@ async function run(): Promise<void> {
   assert.ok(embed instanceof EmbedBuilder);
   const data = embed.toJSON();
   assert.match(data.title ?? '', /Hướng dẫn nhanh/);
-  assert.match(data.fields?.map((field) => field.value).join('\n') ?? '', /\/writeup submit url:/);
+  const helpText = data.fields?.map((field) => field.value).join('\n') ?? '';
+  assert.match(helpText, /\/writeup release/);
+  assert.match(helpText, /\/writeup submit url:/);
 
   console.log('help command tests passed');
 }
