@@ -15,9 +15,9 @@
     "test": "tsx src/tests/run-tests.ts",
     "test:smoke": "tsx src/tests/ctftime.test.ts",
     "audit": "bun audit",
-    "lint": "eslint src --ext .ts --max-warnings=0",
-    "format": "prettier --write \"src/**/*.ts\" \"*.json\"",
-    "format:check": "prettier --check \"src/**/*.ts\" \"*.json\"",
+    "lint": "eslint src scripts --ext .ts --max-warnings=0",
+    "format": "prettier --write \"src/**/*.ts\" \"scripts/**/*.ts\" \"*.json\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"scripts/**/*.ts\" \"*.json\"",
     "check": "bun run format:check && bun run lint && bun run build && bun run test"
   },
   "keywords": [

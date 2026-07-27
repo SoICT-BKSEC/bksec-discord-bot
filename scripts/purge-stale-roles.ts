@@ -18,16 +18,22 @@ import path from 'path';
 
 const APPLY = process.argv.includes('--apply');
 
-const token = process.env.BOT_TOKEN;
-const guildId = process.env.SERVER_ID;
-if (!token) {
-  console.error('BOT_TOKEN not set in .env');
-  process.exit(1);
+/**
+ * Read a required env var. process.exit returns never, so the return type is a
+ * plain string — callers get a narrowed value without a non-null assertion,
+ * which module-level `const` narrowing would not survive into function bodies.
+ */
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    console.error(`${name} not set in .env`);
+    process.exit(1);
+  }
+  return value;
 }
-if (!guildId) {
-  console.error('SERVER_ID not set in .env');
-  process.exit(1);
-}
+
+const token = requireEnv('BOT_TOKEN');
+const guildId = requireEnv('SERVER_ID');
 
 // Config roles that must never be deleted even if a row references them.
 const PROTECTED_ROLE_IDS = new Set(

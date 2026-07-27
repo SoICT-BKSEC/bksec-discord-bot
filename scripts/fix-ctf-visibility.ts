@@ -16,16 +16,25 @@ import path from 'path';
 const APPLY = process.argv.includes('--apply');
 const VIEW_CHANNEL = 1 << 10; // 1024
 
-const token = process.env.BOT_TOKEN;
-const guildId = process.env.SERVER_ID;
-const activeRoleId = process.env.ACTIVE_CTF_ROLEID;
-const viewAllRoleId = process.env.VIEW_ALL_CTF_ROLEID;
-const denyRoleId = process.env.DENY_CTF_ROLEID;
-
-if (!token || !guildId || !activeRoleId || !viewAllRoleId) {
-  console.error('Missing BOT_TOKEN / SERVER_ID / ACTIVE_CTF_ROLEID / VIEW_ALL_CTF_ROLEID in .env');
-  process.exit(1);
+/**
+ * Read a required env var. process.exit returns never, so the return type is a
+ * plain string — callers get a narrowed value without a non-null assertion,
+ * which module-level `const` narrowing would not survive into function bodies.
+ */
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    console.error(`${name} not set in .env`);
+    process.exit(1);
+  }
+  return value;
 }
+
+const token = requireEnv('BOT_TOKEN');
+const guildId = requireEnv('SERVER_ID');
+const activeRoleId = requireEnv('ACTIVE_CTF_ROLEID');
+const viewAllRoleId = requireEnv('VIEW_ALL_CTF_ROLEID');
+const denyRoleId = process.env.DENY_CTF_ROLEID; // optional
 
 const DB_PATH = process.env.DB_PATH ?? path.join(process.cwd(), 'ctf.db');
 const db = new Database(DB_PATH);
@@ -113,18 +122,22 @@ async function main() {
 
     if (!APPLY) {
       console.log(`[${isLive ? 'LIVE ' : 'ENDED'}] ${row.name} — cate ${row.cate}`);
-      isLive ? live++ : ended++;
+      if (isLive) {
+        live++;
+      } else {
+        ended++;
+      }
       continue;
     }
 
     try {
       if (isLive) {
         // @everyone has ViewChannel in this guild's base perms — deny explicitly.
-        await putOverwrite(row.cate, guildId!, 0, VIEW_CHANNEL);
-        await putOverwrite(row.cate, activeRoleId!, VIEW_CHANNEL, 0);
+        await putOverwrite(row.cate, guildId, 0, VIEW_CHANNEL);
+        await putOverwrite(row.cate, activeRoleId, VIEW_CHANNEL, 0);
         if (denyRoleId) await putOverwrite(row.cate, denyRoleId, 0, VIEW_CHANNEL);
         await deleteOverwrite(row.cate, row.role);
-        await deleteOverwrite(row.cate, viewAllRoleId!);
+        await deleteOverwrite(row.cate, viewAllRoleId);
         db.prepare(
           "UPDATE ctfs SET post_end_opened = 0, updated_at = strftime('%s','now') WHERE id = ?"
         ).run(row.id);
@@ -132,10 +145,10 @@ async function main() {
         live++;
       } else {
         // @everyone stays denied so access remains role-gated.
-        await putOverwrite(row.cate, guildId!, 0, VIEW_CHANNEL);
-        await putOverwrite(row.cate, activeRoleId!, VIEW_CHANNEL, 0);
+        await putOverwrite(row.cate, guildId, 0, VIEW_CHANNEL);
+        await putOverwrite(row.cate, activeRoleId, VIEW_CHANNEL, 0);
         await putOverwrite(row.cate, row.role, VIEW_CHANNEL, 0);
-        await putOverwrite(row.cate, viewAllRoleId!, VIEW_CHANNEL, 0);
+        await putOverwrite(row.cate, viewAllRoleId, VIEW_CHANNEL, 0);
         db.prepare(
           "UPDATE ctfs SET post_end_opened = 1, updated_at = strftime('%s','now') WHERE id = ?"
         ).run(row.id);
