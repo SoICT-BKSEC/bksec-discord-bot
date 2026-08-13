@@ -5,13 +5,15 @@ import {
   REST,
   Routes,
   ChatInputCommandInteraction,
+  Interaction,
 } from 'discord.js';
 import { config } from './config/env';
 import logger from './utils/logger';
-import { handleReady } from './events/ready';
+import { handleReady, stopReadyServices } from './events/ready';
 import { handleButtonInteraction } from './components/buttons';
 import { handleChallengeMessage } from './events/message-create';
 import { Command } from './types';
+import databaseService from './services/database.service';
 
 // Import all commands
 import ctInfoFind from './commands/ctftime/info-find';
@@ -71,6 +73,7 @@ class BotClient extends Client {
 }
 
 const client = new BotClient();
+let shuttingDown = false;
 
 // Register all commands
 const commands: Command[] = [
@@ -136,15 +139,20 @@ async function deployCommands() {
 /**
  * Handle ready event
  */
-client.once('clientReady', async () => {
-  await handleReady(client);
-  await deployCommands();
+client.once('clientReady', () => {
+  void (async () => {
+    await handleReady(client);
+    await deployCommands();
+  })().catch((error) => {
+    logger.error('Bot initialization failed:', error);
+    void shutdown('initialization failure', 1);
+  });
 });
 
 /**
  * Handle interaction create event
  */
-client.on('interactionCreate', async (interaction) => {
+async function handleInteraction(interaction: Interaction): Promise<void> {
   try {
     if (interaction.isAutocomplete()) {
       const command = client.commands.get(interaction.commandName);
@@ -180,41 +188,90 @@ client.on('interactionCreate', async (interaction) => {
       };
 
       if (interaction.replied || interaction.deferred) {
-        await interaction.followUp(errorMessage);
+        await interaction.followUp(errorMessage).catch((replyError) => {
+          logger.warn('Could not send interaction error follow-up:', replyError);
+        });
       } else {
-        await interaction.reply(errorMessage);
+        await interaction.reply(errorMessage).catch((replyError) => {
+          logger.warn('Could not send interaction error response:', replyError);
+        });
       }
     }
   }
+}
+
+client.on('interactionCreate', (interaction) => {
+  void handleInteraction(interaction).catch((error) => {
+    logger.error('Interaction boundary failed:', error);
+  });
 });
 
-client.on('messageCreate', async (message) => {
-  await handleChallengeMessage(message);
+client.on('messageCreate', (message) => {
+  void handleChallengeMessage(message).catch((error) => {
+    logger.error('Message boundary failed:', error);
+  });
 });
+
+client.on('error', (error) => logger.error('Discord client error:', error));
+client.on('warn', (warning) => logger.warn(`Discord client warning: ${warning}`));
+client.on('shardError', (error, shardId) => logger.error(`Discord shard ${shardId} error:`, error));
+client.on('invalidated', () => {
+  logger.error('Discord session invalidated; requesting a clean restart.');
+  void shutdown('Discord session invalidated', 1);
+});
+
+async function shutdown(reason: string, exitCode: number): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+
+  if (exitCode === 0) {
+    logger.info(`Shutting down: ${reason}`);
+  } else {
+    logger.error(`Shutting down after fatal error: ${reason}`);
+  }
+
+  stopReadyServices();
+  try {
+    client.destroy();
+  } catch (error) {
+    logger.warn('Could not destroy Discord client cleanly:', error);
+  }
+  try {
+    databaseService.close();
+  } catch (error) {
+    logger.warn('Could not close SQLite cleanly:', error);
+  }
+
+  // Give Winston transports a short window to flush before terminating.
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  process.exit(exitCode);
+}
 
 /**
  * Handle process errors
  */
-process.on('unhandledRejection', (error) => {
+process.once('unhandledRejection', (error) => {
   logger.error('Unhandled promise rejection:', error);
+  void shutdown('unhandled promise rejection', 1);
 });
 
-process.on('uncaughtException', (error) => {
+process.once('uncaughtException', (error) => {
   logger.error('Uncaught exception:', error);
-  process.exit(1);
+  void shutdown('uncaught exception', 1);
 });
+
+process.once('SIGINT', () => void shutdown('SIGINT', 0));
+process.once('SIGTERM', () => void shutdown('SIGTERM', 0));
 
 /**
  * Start the bot
  */
 async function start() {
-  try {
-    await client.login(config.BOT_TOKEN);
-    logger.info('Bot login successful');
-  } catch (error) {
-    logger.error('Failed to login:', error);
-    process.exit(1);
-  }
+  await client.login(config.BOT_TOKEN);
+  logger.info('Bot login successful');
 }
 
-start();
+void start().catch((error) => {
+  logger.error('Failed to login:', error);
+  void shutdown('login failure', 1);
+});

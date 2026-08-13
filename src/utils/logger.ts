@@ -18,6 +18,9 @@ const silent = process.env.NODE_ENV === 'test';
 // Configure Winston logger
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
+  // Process lifecycle is owned by src/index.ts so fatal errors can close Discord
+  // and SQLite cleanly before the supervisor restarts the bot.
+  exitOnError: false,
   format: combine(errors({ stack: true }), timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }), logFormat),
   transports: [
     // Console transport with colors

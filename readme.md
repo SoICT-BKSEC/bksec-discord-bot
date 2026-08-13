@@ -152,6 +152,8 @@ bun run build
 bun start
 ```
 
+`bun start` runs a small supervisor. If the bot exits unexpectedly, it restarts with exponential backoff; after five rapid failures it stops to avoid an infinite loop caused by invalid configuration or credentials. `SIGINT`/`SIGTERM` are forwarded so Discord, the scheduler, and SQLite shut down cleanly. Use `bun run start:direct` only when debugging without automatic restart.
+
 Development mode:
 
 ```bash
@@ -163,10 +165,11 @@ Useful scripts:
 ```bash
 bun run check       # formatting, lint, build, and deterministic tests
 bun run audit       # scan direct and transitive dependencies
+bun run start:direct # run once without automatic restart
 bun run test        # deterministic local tests (no network)
 bun run test:smoke  # optional live CTFtime API smoke test
 bun run lint        # lint src/ with zero warnings allowed
-bun run format      # format TypeScript and root JSON files
+bun run format      # format source, maintenance scripts, and root JSON files
 ```
 
 Maintenance scripts operate on `DB_PATH` or `./ctf.db` when `DB_PATH` is unset:

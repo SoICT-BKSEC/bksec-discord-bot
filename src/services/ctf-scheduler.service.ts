@@ -18,6 +18,12 @@ class CTFSchedulerService {
     this.interval = setInterval(() => void this.tick(client), TICK_INTERVAL_MS);
   }
 
+  stop(): void {
+    if (!this.interval) return;
+    clearInterval(this.interval);
+    this.interval = null;
+  }
+
   async tick(client: Client): Promise<void> {
     if (this.running) return;
     this.running = true;

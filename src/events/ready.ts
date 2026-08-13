@@ -6,6 +6,7 @@ import { config } from '../config/env';
 import ctfSchedulerService from '../services/ctf-scheduler.service';
 
 let statusIndex = 0;
+let statusInterval: NodeJS.Timeout | null = null;
 
 /**
  * Handle bot ready event
@@ -41,13 +42,23 @@ export async function handleReady(client: Client) {
  * Start rotating bot status messages
  */
 function startStatusRotation(client: Client) {
+  if (statusInterval) return;
+
   // Set initial status
   updateStatus(client);
 
   // Update status every minute
-  setInterval(() => {
+  statusInterval = setInterval(() => {
     updateStatus(client);
   }, 60000); // 1 minute
+}
+
+export function stopReadyServices(): void {
+  if (statusInterval) {
+    clearInterval(statusInterval);
+    statusInterval = null;
+  }
+  ctfSchedulerService.stop();
 }
 
 /**
