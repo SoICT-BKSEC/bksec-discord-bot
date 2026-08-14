@@ -38,6 +38,20 @@ const denyRoleId = process.env.DENY_CTF_ROLEID; // optional
 
 const DB_PATH = process.env.DB_PATH ?? path.join(process.cwd(), 'ctf.db');
 const db = new Database(DB_PATH);
+const managedChannelTableExists = Boolean(
+  db
+    .prepare(
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'bot_managed_discord_channels'"
+    )
+    .get()
+);
+
+function isManagedDiscordChannel(channelId: string): boolean {
+  if (!managedChannelTableExists) return false;
+  return Boolean(
+    db.prepare('SELECT 1 FROM bot_managed_discord_channels WHERE channel_id = ?').get(channelId)
+  );
+}
 
 // Ensure the column exists — the bot creates it on startup, but this script may
 // run before the bot has restarted. Safe to run even if already migrated.
@@ -61,7 +75,12 @@ interface CTFRow {
 }
 
 // PUT a role permission overwrite (type 0 = role).
-async function putOverwrite(channelId: string, roleId: string, allow: number, deny: number) {
+async function putOverwrite(
+  channelId: string,
+  roleId: string,
+  allow: number | bigint,
+  deny: number | bigint
+) {
   await rest.put(Routes.channelPermission(channelId, roleId), {
     body: { type: 0, allow: String(allow), deny: String(deny) },
     reason: 'CTF active-role visibility migration',
@@ -78,18 +97,18 @@ async function deleteOverwrite(channelId: string, roleId: string) {
   }
 }
 
-/**
- * Make a channel's overwrites exactly match its category's, i.e. what Discord
- * calls "synced". A synced channel then tracks future category changes.
- */
-async function syncToCategory(channelId: string, categoryId: string) {
-  const category = (await rest.get(Routes.channel(categoryId))) as {
+/** Deny @everyone without replacing any other channel-specific permissions. */
+async function denyViewPreservingOtherBits(channelId: string, roleId: string) {
+  const channel = (await rest.get(Routes.channel(channelId))) as {
     permission_overwrites?: Array<{ id: string; type: number; allow: string; deny: string }>;
   };
-  await rest.patch(Routes.channel(channelId), {
-    body: { permission_overwrites: category.permission_overwrites ?? [] },
-    reason: 'CTF active-role visibility migration: re-sync to category',
-  });
+  const overwrite = channel.permission_overwrites?.find(
+    (item) => item.id === roleId && item.type === 0
+  );
+  const viewChannel = BigInt(VIEW_CHANNEL);
+  const allow = BigInt(overwrite?.allow ?? '0') & ~viewChannel;
+  const deny = BigInt(overwrite?.deny ?? '0') | viewChannel;
+  await putOverwrite(channelId, roleId, allow, deny);
 }
 
 async function main() {
@@ -115,6 +134,11 @@ async function main() {
 
   for (const row of rows) {
     if (row.archived === 1 || row.channels_purged === 1 || !row.cate || row.cate === '0') {
+      skipped++;
+      continue;
+    }
+    if (!isManagedDiscordChannel(row.cate)) {
+      console.log(`[SKIP ] ${row.name} — category permissions are manually managed`);
       skipped++;
       continue;
     }
@@ -156,13 +180,17 @@ async function main() {
         ended++;
       }
 
-      // The info channel must carry NO overwrites of its own — any overwrite desyncs
-      // it from the category and it stops tracking the category's @everyone deny.
-      // Re-sync it by replacing its overwrite list with the category's, so whoever
-      // can see the category can both view and talk in it.
+      // Never re-sync an existing channel: that would erase intentional custom
+      // denies. Only enforce the non-public invariant while preserving all other
+      // channel-specific overwrites.
       if (row.channel && row.channel !== '0') {
-        await syncToCategory(row.channel, row.cate);
-        console.log(`         info channel -> re-synced to category`);
+        if (isManagedDiscordChannel(row.channel)) {
+          await denyViewPreservingOtherBits(row.channel, guildId);
+          if (denyRoleId) await denyViewPreservingOtherBits(row.channel, denyRoleId);
+          console.log(`         info channel -> kept custom overwrites; public access denied`);
+        } else {
+          console.log(`         info channel -> manual permissions preserved`);
+        }
       }
     } catch (err) {
       console.error(`[FAIL ] ${row.name} (cate ${row.cate}):`, err);

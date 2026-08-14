@@ -12,6 +12,7 @@ import {
   CTFChallengeCategory,
   ChallengeCategory,
   ChallengeStatus,
+  ManagedDiscordChannelKind,
 } from '../types';
 import logger from '../utils/logger';
 import {
@@ -297,6 +298,15 @@ class DatabaseService {
           PRIMARY KEY(ctf_id, milestone),
           FOREIGN KEY(ctf_id) REFERENCES ctfs(id) ON DELETE CASCADE
         );
+
+        CREATE TABLE IF NOT EXISTS bot_managed_discord_channels (
+          channel_id TEXT PRIMARY KEY,
+          parent_category_id TEXT,
+          kind TEXT NOT NULL CHECK (kind IN ('category','info','system','challenge')),
+          created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_bot_managed_discord_channels_parent
+          ON bot_managed_discord_channels(parent_category_id);
       `);
 
       this.addColumnIfMissing('ctfs', 'channels_purged', 'INTEGER NOT NULL DEFAULT 0');
@@ -867,6 +877,53 @@ class DatabaseService {
     const category = await this.findChallengeCategoryByName(input.ctfId, normalizedName);
     if (!category) throw new Error('Registered challenge category not found');
     return category;
+  }
+
+  /**
+   * Persist explicit ownership before the bot is allowed to edit channel permissions.
+   * Existing Discord resources are never inserted automatically.
+   */
+  async registerManagedDiscordChannel(input: {
+    channelId: string;
+    parentCategoryId?: string;
+    kind: ManagedDiscordChannelKind;
+  }): Promise<void> {
+    this.db
+      .prepare(
+        `INSERT INTO bot_managed_discord_channels (channel_id, parent_category_id, kind)
+         VALUES (?, ?, ?)
+         ON CONFLICT(channel_id) DO UPDATE SET
+           parent_category_id = excluded.parent_category_id,
+           kind = excluded.kind`
+      )
+      .run(input.channelId, input.parentCategoryId ?? null, input.kind);
+  }
+
+  async isManagedDiscordChannel(channelId: string): Promise<boolean> {
+    const row = this.db
+      .prepare('SELECT 1 AS found FROM bot_managed_discord_channels WHERE channel_id = ?')
+      .get(channelId) as { found: number } | undefined;
+    return row?.found === 1;
+  }
+
+  async getManagedDiscordChannelIds(parentCategoryId: string): Promise<Set<string>> {
+    const rows = this.db
+      .prepare('SELECT channel_id FROM bot_managed_discord_channels WHERE parent_category_id = ?')
+      .all(parentCategoryId) as Array<{ channel_id: string }>;
+    return new Set(rows.map((row) => row.channel_id));
+  }
+
+  async removeManagedDiscordChannel(channelId: string): Promise<void> {
+    this.db.prepare('DELETE FROM bot_managed_discord_channels WHERE channel_id = ?').run(channelId);
+  }
+
+  async removeManagedDiscordCategory(categoryId: string): Promise<void> {
+    this.db
+      .prepare(
+        `DELETE FROM bot_managed_discord_channels
+         WHERE channel_id = ? OR parent_category_id = ?`
+      )
+      .run(categoryId, categoryId);
   }
 
   async getChallengeCategories(ctfId: number): Promise<CTFChallengeCategory[]> {

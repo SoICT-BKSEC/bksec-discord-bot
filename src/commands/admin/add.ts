@@ -89,7 +89,11 @@ const command: Command = {
       }
 
       await interaction.editReply({
-        embeds: [successEmbed(`<***${categoryName}***> đã được thêm vào danh sách.`)],
+        embeds: [
+          successEmbed(
+            `<***${categoryName}***> đã được thêm vào danh sách. Permission hiện tại được giữ nguyên vì đây là category tạo thủ công.`
+          ),
+        ],
       });
 
       if (config.LOG_CHANNELID) {

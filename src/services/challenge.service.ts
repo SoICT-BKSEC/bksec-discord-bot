@@ -8,9 +8,9 @@ import {
   TextChannel,
 } from 'discord.js';
 import databaseService from './database.service';
+import discordService from './discord.service';
 import { CHALLENGE_CATEGORIES, CTFChallenge, CTFData, ChallengeStatus } from '../types';
 import logger from '../utils/logger';
-import { config } from '../config/env';
 import { formatChallengeCategories } from '../utils/challenge-category';
 
 export const CHALLENGE_LIST_OPEN_PREFIX = 'challenge_list_open:';
@@ -150,28 +150,6 @@ class ChallengeService {
     return this.notificationChannel(guild, ctf);
   }
 
-  private async configureReadOnlyChannel(
-    guild: Guild,
-    channel: TextChannel,
-    ctf: CTFData
-  ): Promise<void> {
-    const readOnlyRoleIds = [config.ACTIVE_CTF_ROLEID, config.VIEW_ALL_CTF_ROLEID, ctf.role].filter(
-      Boolean
-    );
-
-    await channel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: false });
-    for (const roleId of new Set(readOnlyRoleIds)) {
-      await channel.permissionOverwrites.edit(roleId, { SendMessages: false });
-    }
-
-    if (guild.members.me) {
-      await channel.permissionOverwrites.edit(guild.members.me, {
-        ViewChannel: true,
-        SendMessages: true,
-      });
-    }
-  }
-
   private async readOnlyChannel(
     guild: Guild,
     ctf: CTFData,
@@ -197,7 +175,21 @@ class ChallengeService {
             parent: category.id,
             reason: `CTF ${channelName} for ${ctf.name}`,
           })
-          .then((channel) => channel)
+          .then(async (channel) => {
+            try {
+              await databaseService.registerManagedDiscordChannel({
+                channelId: channel.id,
+                parentCategoryId: category.id,
+                kind: 'system',
+              });
+              return channel;
+            } catch (error) {
+              await channel
+                .delete('Rolling back system channel with unrecorded ownership')
+                .catch(() => undefined);
+              throw error;
+            }
+          })
           .catch((error) => {
             logger.warn(`Could not create ${channelName} channel for ${ctf.name}:`, error);
             return null;
@@ -210,7 +202,7 @@ class ChallengeService {
     }
 
     if (!targetChannel || targetChannel.type !== ChannelType.GuildText) return null;
-    await this.configureReadOnlyChannel(guild, targetChannel, ctf).catch((error) => {
+    await discordService.reconcileCategoryChildrenPermissions(category, ctf.role).catch((error) => {
       logger.warn(`Could not make ${channelName} read-only for ${ctf.name}:`, error);
     });
     return targetChannel;

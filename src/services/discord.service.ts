@@ -7,12 +7,22 @@ import {
   GuildScheduledEventCreateOptions,
   GuildScheduledEventEntityType,
   GuildScheduledEventPrivacyLevel,
+  OverwriteType,
+  PermissionFlagsBits,
+  type NonThreadGuildBasedChannel,
+  type PermissionOverwriteOptions,
+  type RoleResolvable,
+  type UserResolvable,
 } from 'discord.js';
 import logger from '../utils/logger';
 import { config } from '../config/env';
 import databaseService from './database.service';
 import { isCtfLive } from '../utils/ctf-visibility';
 import { CTFData } from '../types';
+import {
+  buildChildVisibilityPlan,
+  buildManagedVisibilityPolicy,
+} from '../utils/ctf-channel-permissions';
 
 const READ_ONLY_CTF_CHANNELS = new Set(['announcements', 'solved', 'writeups']);
 
@@ -20,28 +30,93 @@ const READ_ONLY_CTF_CHANNELS = new Set(['announcements', 'solved', 'writeups']);
  * Discord helper service for managing channels, roles, and permissions
  */
 class DiscordService {
-  private async syncCategoryChildren(
+  private async mayManagePermissions(channelId: string, channelName: string): Promise<boolean> {
+    const managed = await databaseService.isManagedDiscordChannel(channelId);
+    if (!managed) {
+      logger.info(
+        `Preserved permissions for manually managed channel: ${channelName} (${channelId})`
+      );
+    }
+    return managed;
+  }
+
+  private async editManagedPermissionOverwrite(
+    channel: NonThreadGuildBasedChannel,
+    target: RoleResolvable | UserResolvable,
+    permissions: PermissionOverwriteOptions
+  ): Promise<boolean> {
+    if (!(await this.mayManagePermissions(channel.id, channel.name))) return false;
+    await channel.permissionOverwrites.edit(target, permissions);
+    return true;
+  }
+
+  private async deleteManagedPermissionOverwrite(
+    channel: NonThreadGuildBasedChannel,
+    target: RoleResolvable | UserResolvable
+  ): Promise<boolean> {
+    if (!(await this.mayManagePermissions(channel.id, channel.name))) return false;
+    await channel.permissionOverwrites.delete(target);
+    return true;
+  }
+
+  async reconcileCategoryChildrenPermissions(
     category: CategoryChannel,
     perCtfRoleId?: string
   ): Promise<void> {
-    for (const [, channel] of category.children.cache) {
-      await channel.lockPermissions();
-      if (channel.type !== ChannelType.GuildText || !READ_ONLY_CTF_CHANNELS.has(channel.name)) {
-        continue;
-      }
+    const managedChannelIds = await databaseService.getManagedDiscordChannelIds(category.id);
+    const managedRoleIds = [config.ACTIVE_CTF_ROLEID, config.VIEW_ALL_CTF_ROLEID, perCtfRoleId];
+    const categoryAllowedRoleIds = managedRoleIds.filter((roleId): roleId is string => {
+      if (!roleId) return false;
+      return Boolean(
+        category.permissionOverwrites.cache.get(roleId)?.allow.has(PermissionFlagsBits.ViewChannel)
+      );
+    });
+    const policy = buildManagedVisibilityPolicy(
+      managedRoleIds,
+      categoryAllowedRoleIds,
+      config.DENY_CTF_ROLEID
+    );
 
-      await channel.permissionOverwrites.edit(category.guild.roles.everyone, {
-        SendMessages: false,
-      });
-      for (const roleId of new Set(
-        [config.ACTIVE_CTF_ROLEID, config.VIEW_ALL_CTF_ROLEID, perCtfRoleId].filter(
-          (value): value is string => Boolean(value)
+    for (const [, channel] of category.children.cache) {
+      const isSystemChannel =
+        channel.type === ChannelType.GuildText && READ_ONLY_CTF_CHANNELS.has(channel.name);
+      const currentAllowedRoleIds = channel.permissionOverwrites.cache
+        .filter(
+          (overwrite) =>
+            overwrite.type === OverwriteType.Role &&
+            overwrite.allow.has(PermissionFlagsBits.ViewChannel)
         )
-      )) {
-        await channel.permissionOverwrites.edit(roleId, { SendMessages: false });
+        .map((overwrite) => overwrite.id);
+      const plan = buildChildVisibilityPlan({
+        managedByBot: managedChannelIds.has(channel.id),
+        // `null` means Discord.js cannot prove the parent relationship from
+        // cache; preserve it rather than risking a destructive desync.
+        permissionsLocked: channel.permissionsLocked !== false,
+        isSystemChannel,
+        currentAllowedRoleIds,
+        policy,
+      });
+
+      if (!plan.enforceEveryoneDeny) continue;
+
+      await this.editManagedPermissionOverwrite(channel, category.guild.roles.everyone, {
+        ViewChannel: false,
+        ...(isSystemChannel ? { SendMessages: false } : {}),
+      });
+      for (const roleId of plan.allowedRoleIds) {
+        await this.editManagedPermissionOverwrite(channel, roleId, {
+          ViewChannel: true,
+          SendMessages: false,
+        });
       }
-      if (category.guild.members.me) {
-        await channel.permissionOverwrites.edit(category.guild.members.me, {
+      for (const roleId of plan.deniedRoleIds) {
+        await this.editManagedPermissionOverwrite(channel, roleId, {
+          ViewChannel: false,
+          ...(isSystemChannel ? { SendMessages: false } : {}),
+        });
+      }
+      if (isSystemChannel && category.guild.members.me) {
+        await this.editManagedPermissionOverwrite(channel, category.guild.members.me, {
           ViewChannel: true,
           SendMessages: true,
         });
@@ -99,6 +174,10 @@ class DiscordService {
         name: normalizedName,
         type: ChannelType.GuildCategory,
       });
+      await databaseService.registerManagedDiscordChannel({
+        channelId: category.id,
+        kind: 'category',
+      });
 
       // Live-phase visibility: active role only
       await this.applyLivePermissions(guild, category.id, role.id);
@@ -114,6 +193,11 @@ class DiscordService {
         name: normalizedName,
         type: ChannelType.GuildText,
         parent: category.id,
+      });
+      await databaseService.registerManagedDiscordChannel({
+        channelId: infoChannel.id,
+        parentCategoryId: category.id,
+        kind: 'info',
       });
 
       logger.info(`Created info channel: ${infoChannel.name}`);
@@ -133,14 +217,19 @@ class DiscordService {
       ];
 
       for (const channelName of channelNames) {
-        await guild.channels.create({
+        const childChannel = await guild.channels.create({
           name: channelName,
           type: ChannelType.GuildText,
           parent: category.id,
         });
+        await databaseService.registerManagedDiscordChannel({
+          channelId: childChannel.id,
+          parentCategoryId: category.id,
+          kind: READ_ONLY_CTF_CHANNELS.has(channelName) ? 'system' : 'challenge',
+        });
         logger.debug(`Created channel: ${channelName}`);
       }
-      await this.syncCategoryChildren(category, role.id);
+      await this.reconcileCategoryChildrenPermissions(category, role.id);
 
       return { category, role, infoChannel };
     } catch (error) {
@@ -183,6 +272,10 @@ class DiscordService {
         name: normalizedName,
         type: ChannelType.GuildCategory,
       });
+      await databaseService.registerManagedDiscordChannel({
+        channelId: category.id,
+        kind: 'category',
+      });
 
       // Live-phase visibility: active role only
       await this.applyLivePermissions(guild, category.id, role.id);
@@ -195,6 +288,11 @@ class DiscordService {
         type: ChannelType.GuildText,
         parent: category.id,
       });
+      await databaseService.registerManagedDiscordChannel({
+        channelId: infoChannel.id,
+        parentCategoryId: category.id,
+        kind: 'info',
+      });
 
       // Create general discussion channel
       const generalChannel = await guild.channels.create({
@@ -202,36 +300,61 @@ class DiscordService {
         type: ChannelType.GuildText,
         parent: category.id,
       });
+      await databaseService.registerManagedDiscordChannel({
+        channelId: generalChannel.id,
+        parentCategoryId: category.id,
+        kind: 'challenge',
+      });
 
-      await guild.channels.create({
+      const announcementsChannel = await guild.channels.create({
         name: 'announcements',
         type: ChannelType.GuildText,
         parent: category.id,
       });
+      await databaseService.registerManagedDiscordChannel({
+        channelId: announcementsChannel.id,
+        parentCategoryId: category.id,
+        kind: 'system',
+      });
 
-      await guild.channels.create({
+      const solvedChannel = await guild.channels.create({
         name: 'solved',
         type: ChannelType.GuildText,
         parent: category.id,
       });
+      await databaseService.registerManagedDiscordChannel({
+        channelId: solvedChannel.id,
+        parentCategoryId: category.id,
+        kind: 'system',
+      });
 
-      await guild.channels.create({
+      const writeupsChannel = await guild.channels.create({
         name: 'writeups',
         type: ChannelType.GuildText,
         parent: category.id,
+      });
+      await databaseService.registerManagedDiscordChannel({
+        channelId: writeupsChannel.id,
+        parentCategoryId: category.id,
+        kind: 'system',
       });
 
       // Keep manual and CTFtime categories consistent so auto-registration works.
       const channelNames = ['web', 'crypto', 'pwn', 'rev', 'forensics', 'misc'];
 
       for (const channelName of channelNames) {
-        await guild.channels.create({
+        const childChannel = await guild.channels.create({
           name: channelName,
           type: ChannelType.GuildText,
           parent: category.id,
         });
+        await databaseService.registerManagedDiscordChannel({
+          channelId: childChannel.id,
+          parentCategoryId: category.id,
+          kind: 'challenge',
+        });
       }
-      await this.syncCategoryChildren(category, role.id);
+      await this.reconcileCategoryChildrenPermissions(category, role.id);
 
       return { category, role, infoChannel, generalChannel };
     } catch (error) {
@@ -261,16 +384,17 @@ class DiscordService {
         logger.warn(`Channel is not a category: ${categoryId}`);
         return false;
       }
+      if (!(await this.mayManagePermissions(category.id, category.name))) return true;
 
-      await category.permissionOverwrites.edit(guild.roles.everyone, {
+      await this.editManagedPermissionOverwrite(category, guild.roles.everyone, {
         ViewChannel: false,
       });
       if (config.DENY_CTF_ROLEID) {
-        await category.permissionOverwrites.edit(config.DENY_CTF_ROLEID, {
+        await this.editManagedPermissionOverwrite(category, config.DENY_CTF_ROLEID, {
           ViewChannel: false,
         });
       }
-      await this.syncCategoryChildren(category, perCtfRoleId);
+      await this.reconcileCategoryChildrenPermissions(category, perCtfRoleId);
 
       if (infoChannelId) logger.debug(`Archived info channel ${infoChannelId} with its category`);
 
@@ -307,6 +431,7 @@ class DiscordService {
       const category = await guild.channels.fetch(categoryId).catch(() => null);
 
       if (!category) {
+        await databaseService.removeManagedDiscordCategory(categoryId);
         logger.info(`Category already absent: ${categoryId}`);
         return true;
       }
@@ -323,6 +448,7 @@ class DiscordService {
 
       // Delete category
       await category.delete();
+      await databaseService.removeManagedDiscordCategory(categoryId);
       logger.info(`Deleted category: ${category.name}`);
 
       return true;
@@ -348,13 +474,23 @@ class DiscordService {
       if (!category.name.startsWith('[UNLISTED]')) {
         await category.setName(`[UNLISTED] ${category.name}`.slice(0, 100));
       }
-      await category.permissionOverwrites.edit(guild.roles.everyone, { ViewChannel: false });
-      await category.permissionOverwrites.edit(config.ACTIVE_CTF_ROLEID, { ViewChannel: true });
-      await category.permissionOverwrites.edit(config.VIEW_ALL_CTF_ROLEID, { ViewChannel: true });
+      if (!(await this.mayManagePermissions(category.id, category.name))) return true;
+
+      await this.editManagedPermissionOverwrite(category, guild.roles.everyone, {
+        ViewChannel: false,
+      });
+      await this.editManagedPermissionOverwrite(category, config.ACTIVE_CTF_ROLEID, {
+        ViewChannel: true,
+      });
+      await this.editManagedPermissionOverwrite(category, config.VIEW_ALL_CTF_ROLEID, {
+        ViewChannel: true,
+      });
       if (config.DENY_CTF_ROLEID) {
-        await category.permissionOverwrites.edit(config.DENY_CTF_ROLEID, { ViewChannel: false });
+        await this.editManagedPermissionOverwrite(category, config.DENY_CTF_ROLEID, {
+          ViewChannel: false,
+        });
       }
-      await this.syncCategoryChildren(category);
+      await this.reconcileCategoryChildrenPermissions(category);
 
       logger.info(`Unlisted category: ${category.name}`);
       return true;
@@ -399,22 +535,24 @@ class DiscordService {
       // Get the VIEW_ALL_CTF role
       const viewAllRole = guild.roles.cache.get(config.VIEW_ALL_CTF_ROLEID);
 
-      // Set permissions
-      await category.permissionOverwrites.create(role, {
-        ViewChannel: true,
-      });
-
-      if (viewAllRole) {
-        await category.permissionOverwrites.create(viewAllRole, {
+      if (await this.mayManagePermissions(category.id, category.name)) {
+        // Set permissions only when the category was originally created by the bot.
+        await this.editManagedPermissionOverwrite(category, role, {
           ViewChannel: true,
         });
+
+        if (viewAllRole) {
+          await this.editManagedPermissionOverwrite(category, viewAllRole, {
+            ViewChannel: true,
+          });
+        }
+
+        await this.editManagedPermissionOverwrite(category, guild.roles.everyone, {
+          ViewChannel: false,
+        });
+
+        await this.reconcileCategoryChildrenPermissions(category, role.id);
       }
-
-      await category.permissionOverwrites.create(guild.roles.everyone, {
-        ViewChannel: false,
-      });
-
-      await this.syncCategoryChildren(category, role.id);
 
       logger.info(`Re-listed category: ${category.name}`);
       return role;
@@ -445,15 +583,22 @@ class DiscordService {
       throw new Error(`applyLivePermissions: category not found: ${categoryId}`);
     }
     const category = channel;
+    if (!(await this.mayManagePermissions(category.id, category.name))) return;
 
     // @everyone HAS ViewChannel in this guild's base permissions, so it must be
     // denied explicitly — role allows alone would hide nothing.
-    await category.permissionOverwrites.edit(guild.roles.everyone, { ViewChannel: false });
+    await this.editManagedPermissionOverwrite(category, guild.roles.everyone, {
+      ViewChannel: false,
+    });
 
-    await category.permissionOverwrites.edit(config.ACTIVE_CTF_ROLEID, { ViewChannel: true });
+    await this.editManagedPermissionOverwrite(category, config.ACTIVE_CTF_ROLEID, {
+      ViewChannel: true,
+    });
 
     if (config.DENY_CTF_ROLEID) {
-      await category.permissionOverwrites.edit(config.DENY_CTF_ROLEID, { ViewChannel: false });
+      await this.editManagedPermissionOverwrite(category, config.DENY_CTF_ROLEID, {
+        ViewChannel: false,
+      });
     }
 
     // Ensure the per-CTF role and VIEW_ALL role cannot see it while live.
@@ -463,11 +608,11 @@ class DiscordService {
         roleId !== config.ACTIVE_CTF_ROLEID &&
         category.permissionOverwrites.cache.has(roleId)
       ) {
-        await category.permissionOverwrites.delete(roleId);
+        await this.deleteManagedPermissionOverwrite(category, roleId);
       }
     }
 
-    await this.syncCategoryChildren(category, perCtfRoleId);
+    await this.reconcileCategoryChildrenPermissions(category, perCtfRoleId);
   }
 
   /**
@@ -485,17 +630,26 @@ class DiscordService {
       throw new Error(`applyEndedPermissions: category not found: ${categoryId}`);
     }
     const category = channel;
+    if (!(await this.mayManagePermissions(category.id, category.name))) return;
 
-    await category.permissionOverwrites.edit(guild.roles.everyone, { ViewChannel: false });
+    await this.editManagedPermissionOverwrite(category, guild.roles.everyone, {
+      ViewChannel: false,
+    });
 
     if (perCtfRoleId) {
-      await category.permissionOverwrites.edit(perCtfRoleId, { ViewChannel: true });
+      await this.editManagedPermissionOverwrite(category, perCtfRoleId, {
+        ViewChannel: true,
+      });
     }
-    await category.permissionOverwrites.edit(config.VIEW_ALL_CTF_ROLEID, { ViewChannel: true });
+    await this.editManagedPermissionOverwrite(category, config.VIEW_ALL_CTF_ROLEID, {
+      ViewChannel: true,
+    });
     if (config.DENY_CTF_ROLEID) {
-      await category.permissionOverwrites.edit(config.DENY_CTF_ROLEID, { ViewChannel: false });
+      await this.editManagedPermissionOverwrite(category, config.DENY_CTF_ROLEID, {
+        ViewChannel: false,
+      });
     }
-    await this.syncCategoryChildren(category, perCtfRoleId);
+    await this.reconcileCategoryChildrenPermissions(category, perCtfRoleId);
   }
 
   /** Remove shared credentials before a CTF becomes visible to archive roles. */

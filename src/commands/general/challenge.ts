@@ -14,6 +14,7 @@ import {
 } from '../../types';
 import databaseService from '../../services/database.service';
 import challengeService, { CHALLENGE_PAGE_SIZE } from '../../services/challenge.service';
+import discordService from '../../services/discord.service';
 import { config } from '../../config/env';
 import { requireAdmin, requireRole } from '../../utils/role.guard';
 import { errorEmbed, successEmbed, warningEmbed } from '../../utils/embed.builder';
@@ -207,7 +208,10 @@ const command: Command = {
             registeredChannel?.type === ChannelType.GuildText &&
             registeredChannel.parentId === discordCategory.id
           ) {
-            await registeredChannel.lockPermissions();
+            await discordService.reconcileCategoryChildrenPermissions(
+              discordCategory,
+              ctf.data.role
+            );
             await interaction.editReply({
               embeds: [successEmbed(`Category đã được đăng ký tại <#${registered.channelId}>.`)],
             });
@@ -243,9 +247,16 @@ const command: Command = {
                 parent: discordCategory.id,
                 reason: `Custom challenge category for ${ctf.data.name}`,
               });
-        await challengeChannel.lockPermissions();
 
         try {
+          if (created) {
+            await databaseService.registerManagedDiscordChannel({
+              channelId: challengeChannel.id,
+              parentCategoryId: discordCategory.id,
+              kind: 'challenge',
+            });
+          }
+          await discordService.reconcileCategoryChildrenPermissions(discordCategory, ctf.data.role);
           await databaseService.registerChallengeCategory({
             ctfId: Number(ctf.key),
             name: categoryName,
@@ -256,6 +267,9 @@ const command: Command = {
           if (created) {
             await challengeChannel
               .delete('Rolling back failed custom category registration')
+              .catch(() => undefined);
+            await databaseService
+              .removeManagedDiscordChannel(challengeChannel.id)
               .catch(() => undefined);
           }
           throw error;

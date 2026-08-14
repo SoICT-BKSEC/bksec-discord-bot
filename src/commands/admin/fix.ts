@@ -10,7 +10,7 @@ import { requireAdmin } from '../../utils/role.guard';
 const command: Command = {
   data: new SlashCommandBuilder()
     .setName('admin-fix')
-    .setDescription('Đồng bộ lại quyền category/channel của toàn bộ CTF'),
+    .setDescription('Sửa quyền resource do bot tạo; bỏ qua channel thủ công'),
 
   async execute(interaction: ChatInputCommandInteraction) {
     try {
@@ -66,7 +66,7 @@ const command: Command = {
       }
 
       const message =
-        `Đã đồng bộ ${fixedCount} CTF.` +
+        `Đã cập nhật quyền ${fixedCount} CTF.` +
         (errors.length ? ` Không thể sửa: ${errors.join(', ')}.` : '');
       await interaction.editReply({ embeds: [successEmbed(message)] });
 
@@ -80,7 +80,7 @@ const command: Command = {
       }
     } catch (error) {
       logger.error('Error in admin-fix command:', error);
-      const payload = { embeds: [errorEmbed('Không thể đồng bộ quyền CTF.')] };
+      const payload = { embeds: [errorEmbed('Không thể cập nhật quyền CTF.')] };
       if (interaction.deferred || interaction.replied) {
         await interaction.editReply(payload).catch(() => undefined);
       } else {

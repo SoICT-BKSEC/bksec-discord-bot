@@ -14,6 +14,7 @@ const testFiles =
         'src/tests/challenge-command-schema.test.ts',
         'src/tests/help-command.test.ts',
         'src/tests/ctf-visibility.test.ts',
+        'src/tests/ctf-channel-permissions.test.ts',
         'src/tests/ctf-schedule.test.ts',
         'src/tests/ctf-datetime.test.ts',
         'src/tests/ctf-credentials.test.ts',

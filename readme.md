@@ -12,7 +12,7 @@ Hweplir is a Discord bot for managing CTF participation in one server. It is wri
 - Lets administrators update shared login information; passwords use Discord spoilers and are removed automatically when the competition ends.
 - Opens archive-role access at competition end and archives CTFtime categories after a seven-day grace period.
 - Supports manually-created CTF categories that are not on CTFtime.
-- Provides admin utilities for deleting, importing, fixing, and permission-locking CTF categories.
+- Provides admin utilities for deleting, importing, fixing, and securing CTF category permissions.
 - Can optionally provide a configurable server-role verification command.
 - Handles pagination and confirmation buttons for interactive commands.
 - Tracks challenge threads, claims, status, solves, points, writeups, and a pinned live dashboard.
@@ -73,7 +73,7 @@ After `/solved`, the bot posts a write-up task in the challenge thread. One memb
 
 Challenge solve messages are sent to read-only `solved`, and completed write-ups are sent to read-only `writeups`. Lifecycle reminders and schedule updates remain in `announcements`. New CTF registrations create all three system channels; existing events receive missing channels automatically when their dashboard refreshes or the relevant notification is sent.
 
-Custom challenge categories are scoped to one CTF. Run `/challenge category-add name:<name>` inside that CTF; the bot creates a permission-synced text channel and registers it in SQLite. Challenges created there use it as their primary category, and registered custom categories also appear in `extra_category` autocomplete.
+Custom challenge categories are scoped to one CTF. Run `/challenge category-add name:<name>` inside that CTF; the bot creates a text channel that initially inherits the parent category and registers it in SQLite. Registering an existing channel preserves its custom visibility overwrites. Challenges created there use it as their primary category, and registered custom categories also appear in `extra_category` autocomplete.
 
 The pinned dashboard stays compact when an event has many challenges. Press `Xem challenges` to open a private paginated list, then use `Trang trước` and `Trang sau`. `/challenge list` provides the same buttons and can additionally filter by `category`.
 
@@ -108,6 +108,8 @@ The older training-task workflow is implemented but not currently registered, so
 3. **Archive time reached:** CTFtime events are archived seven days after the competition ends. Manual events are archived `hide_after` days after their supplied `end_at` time.
 
 The scheduler runs every five minutes. Reminder delivery is persisted in SQLite, so restarting the bot does not duplicate already-sent 24-hour, 1-hour, start, 3-hours-left, 1-hour-left, or end notifications. Lifecycle notifications use read-only `announcements`, challenge solves use `solved`, and completed write-ups use `writeups`.
+
+Lifecycle permission updates never call Discord's destructive permission sync. Permission ownership is explicit and persisted in SQLite: the bot may edit only categories and channels that it created and recorded. Pre-existing resources, including system-name channels such as `announcements`, are treated as manually managed and their permission overwrites are never changed. There is no automatic adoption of resources created before this ownership policy. Synced bot-owned channels continue inheriting naturally, while custom overwrites remain unsynced and keep their explicit denies.
 
 ## Runtime requirements
 

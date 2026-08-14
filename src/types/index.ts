@@ -58,6 +58,9 @@ export interface CTFChallengeCategory {
   createdAt: number;
 }
 
+/** Discord resources whose permissions may be maintained by the bot. */
+export type ManagedDiscordChannelKind = 'category' | 'info' | 'system' | 'challenge';
+
 export interface CTFChallenge {
   id: number;
   ctfId: number;

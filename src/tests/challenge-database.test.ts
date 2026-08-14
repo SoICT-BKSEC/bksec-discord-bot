@@ -24,6 +24,29 @@ async function run(): Promise<void> {
     assert.equal(storedCTF?.data.endtime, 300, 'archive time should be stored separately');
     assert.equal(storedCTF?.data.competitionEndtime, 200);
 
+    assert.equal(
+      await databaseService.isManagedDiscordChannel('manual-category'),
+      false,
+      'pre-existing Discord resources must default to manual ownership'
+    );
+    await databaseService.registerManagedDiscordChannel({
+      channelId: 'bot-category',
+      kind: 'category',
+    });
+    await databaseService.registerManagedDiscordChannel({
+      channelId: 'bot-child',
+      parentCategoryId: 'bot-category',
+      kind: 'system',
+    });
+    assert.equal(await databaseService.isManagedDiscordChannel('bot-category'), true);
+    assert.deepEqual(
+      await databaseService.getManagedDiscordChannelIds('bot-category'),
+      new Set(['bot-child'])
+    );
+    await databaseService.removeManagedDiscordCategory('bot-category');
+    assert.equal(await databaseService.isManagedDiscordChannel('bot-category'), false);
+    assert.equal(await databaseService.isManagedDiscordChannel('bot-child'), false);
+
     const legacyId = await databaseService.addCTF({
       ctftimeid: 2,
       role: 'legacy-role',

@@ -42,7 +42,7 @@ Information commands are available to server members. Challenge-management and s
 - Thread names use standardized states: `[OPEN]`, `[ACTIVE]`, `[LEAD]`, and `[SOLVED]`.
 - `/challenge create` infers the primary category from the current channel; `extra_category` may add one different category.
 - The member running `/challenge create` is added to the new thread automatically, without claiming it or changing `[OPEN]` status.
-- `/challenge category-add name:<name>` creates or registers a permission-synced channel scoped to the current CTF. Custom categories are available to challenge creation and `extra_category` autocomplete only for that event.
+- `/challenge category-add name:<name>` creates and ownership-marks a new channel, or registers an existing channel as manually managed without changing any permission overwrite. Custom categories are available only for that event.
 - The pinned dashboard truncates a long challenge list and provides `Xem challenges`. It opens a private list with `Trang trước` and `Trang sau`; `/challenge list` provides the same controls and supports `category:<name>` filtering.
 
 ### `/c-list` options
@@ -113,7 +113,7 @@ Restricted to users with the configured admin role or Discord Administrator perm
 | `/admin-delete` | Delete a CTF — prompts to choose between full delete or keep channels | `search_id` *(CTFTime ID or Category ID, required)* |
 | `/admin-hide` | Manually archive all CTFs that have passed their archive time | — |
 | `/admin-deny-role` | Apply `ViewChannel: false` for `DENY_CTF_ROLEID` across all CTF categories | — |
-| `/admin-fix` | Rebuild category/channel permissions for live, ended, and archived CTFs | — |
+| `/admin-fix` | Rebuild lifecycle permissions only for bot-owned resources; manual permissions are skipped | — |
 | `/admin-reg_special` | Register a CTF that is not on CTFTime using its real schedule | `name`, `start_at`, `end_at` *(required)*; `hide_after` *(optional)* |
 | `/admin-set-time` | Correct an existing manual CTF schedule and reset its reminders | `start_at`, `end_at` *(required)*; `hide_after`, `cate_id` *(optional)* |
 | `/admin-unsolve` | Undo an accidental solve in the current challenge thread | — |
@@ -138,7 +138,7 @@ Time strings accept `YYYY-MM-DD HH:mm` in Vietnam time (UTC+7), ISO 8601 with an
 
 ### `/admin-set-time` options
 
-Run this command in a channel/thread belonging to the manual CTF, or supply its Discord Category ID. It updates all three lifecycle times atomically, resets previously-sent reminders, restores live permissions, refreshes the dashboard, and posts a schedule correction.
+Run this command in a channel/thread belonging to the manual CTF, or supply its Discord Category ID. It updates all three lifecycle times atomically, resets previously-sent reminders, refreshes the dashboard, and posts a schedule correction. Live permissions are restored only when the category is recorded as bot-owned; a pre-existing manual category and all manual child channels keep their permission overwrites unchanged.
 
 | Option | Type | Required | Description |
 |--------|------|----------|-------------|

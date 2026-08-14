@@ -126,7 +126,7 @@ const command: Command = {
       await discordService
         .applyLivePermissions(interaction.guild, ctf.data.cate, ctf.data.role)
         .catch((error) => {
-          followUpFailures.push('đồng bộ quyền category');
+          followUpFailures.push('cập nhật quyền category');
           logger.warn(
             `Permission refresh failed after schedule update for ${ctf.data.name}:`,
             error
