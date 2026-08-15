@@ -32,6 +32,7 @@ Information commands are available to server members. Challenge-management and s
 - Requires `ACTIVE_CTF_ROLEID` (Discord administrators are also accepted).
 - Does not require or publish a solver list; the member who runs `/solved` is displayed as the confirmer.
 - Renames the thread with `[SOLVED]`, refreshes the pinned dashboard, posts a congratulations message in the read-only `solved` channel, and opens a write-up task in the challenge thread.
+- Persists and acknowledges the solve first. Discord follow-up work runs concurrently with a per-step timeout, so a slow announcement or dashboard request does not leave the command spinning.
 - Claim the task with `/writeup claim`; use `/writeup release` after a mistaken claim; then submit an HTTP(S) link with `/writeup submit url:<link>`.
 - A five-minute scheduler sends 24h/1h/start/3h-left/1h-left/end reminders and refreshes the countdown dashboard.
 - CTF registration creates and pins the dashboard in the CTF-named info channel immediately.

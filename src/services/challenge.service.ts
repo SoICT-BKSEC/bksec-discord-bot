@@ -182,6 +182,11 @@ class ChallengeService {
                 parentCategoryId: category.id,
                 kind: 'system',
               });
+              await discordService
+                .reconcileCategoryChildrenPermissions(category, ctf.role)
+                .catch((error) => {
+                  logger.warn(`Could not configure new ${channelName} for ${ctf.name}:`, error);
+                });
               return channel;
             } catch (error) {
               await channel
@@ -202,9 +207,6 @@ class ChallengeService {
     }
 
     if (!targetChannel || targetChannel.type !== ChannelType.GuildText) return null;
-    await discordService.reconcileCategoryChildrenPermissions(category, ctf.role).catch((error) => {
-      logger.warn(`Could not make ${channelName} read-only for ${ctf.name}:`, error);
-    });
     return targetChannel;
   }
 
@@ -283,12 +285,16 @@ class ChallengeService {
 
     const targetChannel = await this.dashboardChannel(guild, ctf);
     if (!targetChannel) throw new Error('Dashboard channel not found');
-    await this.solvedChannel(guild, ctf).catch((error) => {
-      logger.warn(`Could not ensure solved channel for ${ctf.name}:`, error);
-    });
-    await this.writeupChannel(guild, ctf).catch((error) => {
-      logger.warn(`Could not ensure writeups channel for ${ctf.name}:`, error);
-    });
+    const systemChannelResults = await Promise.allSettled([
+      this.solvedChannel(guild, ctf),
+      this.writeupChannel(guild, ctf),
+    ]);
+    for (const [index, result] of systemChannelResults.entries()) {
+      if (result.status === 'rejected') {
+        const channelName = index === 0 ? 'solved' : 'writeups';
+        logger.warn(`Could not ensure ${channelName} channel for ${ctf.name}:`, result.reason);
+      }
+    }
     const components = [this.dashboardControls(ctfId, challenges.length === 0)];
 
     const existing = await databaseService.getDashboard(ctfId);

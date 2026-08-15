@@ -60,7 +60,7 @@ Challenge-management commands must be used in a registered CTF category. Except 
 | `/challenge release` | Challenge thread | Remove yourself from the claimant list. |
 | `/challenge status <value>` | Challenge thread | Set the state to `working`, `idea`, or `unclaimed`. |
 | `/challenge dashboard` | Registered CTF channel or challenge thread | Create or refresh the pinned progress dashboard. |
-| `/solved` | Challenge thread | Mark the challenge solved, show the caller as confirmer, rename the thread, refresh the dashboard, and post a congratulations message without a solver list. |
+| `/solved` | Challenge thread | Persist and acknowledge the solve immediately, then asynchronously show the caller as confirmer, rename the thread, refresh the dashboard, and post a congratulations message without a solver list. |
 | `/writeup claim` | Solved challenge thread | Claim responsibility for the challenge writeup. |
 | `/writeup release` | Solved challenge thread | Return a mistakenly claimed writeup task. The current owner or an administrator may release it. |
 | `/writeup submit <url>` | Solved challenge thread | Submit an HTTP(S) writeup URL and publish its challenge, category, author, URL, and thread in `writeups`; only the claimant can submit it. |
